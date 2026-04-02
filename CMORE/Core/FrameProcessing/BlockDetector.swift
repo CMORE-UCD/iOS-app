@@ -23,7 +23,7 @@ struct BlockDetector {
     private let request: CoreMLRequest
 
     init() {
-        guard let model = try? epoch10() else {
+        guard let model = try? ObjectDetector() else {
             fatalError("Fail to load Block Detection Model")
         }
         guard let modelContainer = try? CoreMLModelContainer(model: model.model) else {
