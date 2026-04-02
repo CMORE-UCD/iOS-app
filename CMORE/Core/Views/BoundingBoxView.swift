@@ -18,7 +18,7 @@ struct BoundingBoxView: View {
     }
 
     var body: some View {
-        let rect: CGRect = normalizedBox.toImageCoordinates(geo.size)
+        let rect: CGRect = normalizedBox.toImageCoordinates(geo.size, origin: .upperLeft)
         
         return Rectangle()
             .stroke(Color.red, lineWidth: 2)

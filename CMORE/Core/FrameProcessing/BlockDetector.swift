@@ -66,7 +66,7 @@ struct BlockDetector {
             
             let pixelRect = CGRect(
                 x: CGFloat(x1[i]),
-                y: CGFloat(y1[i]),
+                y: INPUTSIZE.height - CGFloat(y2[i]),
                 width: CGFloat(x2[i] - x1[i]),
                 height: CGFloat(y2[i] - y1[i])
             )
