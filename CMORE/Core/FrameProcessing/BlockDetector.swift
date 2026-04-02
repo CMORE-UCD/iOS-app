@@ -11,7 +11,7 @@ import CoreImage
 import Accelerate
 import Playgrounds
 
-struct BlockObservation: BoundingBoxProviding {
+struct BlockObservation: BoundingBoxProviding, Codable {
     let confidence: Float
     var boundingBox: NormalizedRect
 }
@@ -19,19 +19,24 @@ struct BlockObservation: BoundingBoxProviding {
 nonisolated fileprivate let INPUTSIZE = CGSize(width: 640, height: 640)
 
 struct BlockDetector {
-    
-    static func createBlockDetectionRequest() -> CoreMLRequest {
+
+    private let request: CoreMLRequest
+
+    init() {
         guard let model = try? epoch10() else {
             fatalError("Fail to load Block Detection Model")
         }
-        
         guard let modelContainer = try? CoreMLModelContainer(model: model.model) else {
-            fatalError("Faile to create CoreMLModelContainer for block detector")
+            fatalError("Failed to create CoreMLModelContainer for block detector")
         }
-        
-        return CoreMLRequest(model: modelContainer)
+        self.request = CoreMLRequest(model: modelContainer)
     }
-    
+
+    func detect(on image: CIImage) async -> [BlockObservation] {
+        guard let obs = try? await request.perform(on: image) else { return [] }
+        return BlockDetector.processOutput(obs)
+    }
+
     /// Parses raw CoreML output into block observations that pass the confidence threshold.
     ///
     /// The model outputs a 300x6 matrix where each row is `[x1, y1, x2, y2, conf, class_id]`
@@ -77,32 +82,4 @@ struct BlockDetector {
 // block length 2.5cm or 1in
 nonisolated func blockLengthInPixels(scale: Double) -> Double {
     return 2.5 / scale
-}
-
-#Playground {
-    let model = try? epoch10()
-    
-    let modelContainer = try? CoreMLModelContainer(model: model!.model)
-    
-    let url = Bundle.main.url(forResource: "IMG_2956", withExtension: "png")!
-    let request = CoreMLRequest(model: modelContainer!)
-    
-    let results = try await request.perform(on: url)
-    
-    print(type(of: results))
-//  print Array<visionObservation>
-    print(results.count)
-    // 2
-    print(type(of: results.first!))
-    // CoreMLFeatureValueObservation
-    let observation = results as? [CoreMLFeatureValueObservation]
-    // print nil
-    
-    let array: MLShapedArray<Float> = (observation?.first?.featureValue.shapedArrayValue(of: Float.self))!
-    
-    let shape = array.shape
-    
-    let betterShaped = array.squeezingShape()
-    print(betterShaped.shape)
-    
 }

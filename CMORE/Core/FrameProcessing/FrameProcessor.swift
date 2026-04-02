@@ -63,32 +63,24 @@ actor FrameProcessor {
     }
 
     private var pastBlockCenters: [CGPoint] {
-        guard let recentDetection = results.suffix(FrameProcessingThresholds.recentFrameLookback).last(where: {
-            !$0.blockDetections.isEmpty &&
-            !$0.blockDetections.compactMap { $0.objects }.isEmpty
+        guard let recentResult = results.suffix(FrameProcessingThresholds.recentFrameLookback).last(where: {
+            !$0.blockDetections.isEmpty
         }) else { return [] }
 
         let minDistanceSq = (2*blockSize) * (2*blockSize)
 
-        return recentDetection.blockDetections.reduce(into: [CGPoint]()) { points, detection in
-            guard let blocks = detection.objects else { return }
+        return recentResult.blockDetections.reduce(into: [CGPoint]()) { points, block in
+            let rect = block.boundingBox.toImageCoordinates(CameraSettings.resolution)
+            let candidate = CGPoint(x: rect.midX, y: rect.midY)
+            let candidateVec = SIMD2<Double>(x: candidate.x, y: candidate.y)
 
-            for block in blocks {
-                let rect = block.boundingBox.toImageCoordinates(
-                    from: detection.ROI,
-                    imageSize: CameraSettings.resolution
-                )
-                let candidate = CGPoint(x: rect.midX, y: rect.midY)
-                let candidateVec = SIMD2<Double>(x: candidate.x, y: candidate.y)
+            let isTooClose = points.contains { existingPoint in
+                let existingVec = SIMD2<Double>(x: existingPoint.x, y: existingPoint.y)
+                return simd_distance_squared(candidateVec, existingVec) < minDistanceSq
+            }
 
-                let isTooClose = points.contains { existingPoint in
-                    let existingVec = SIMD2<Double>(x: existingPoint.x, y: existingPoint.y)
-                    return simd_distance_squared(candidateVec, existingVec) < minDistanceSq
-                }
-
-                if !isTooClose {
-                    points.append(candidate)
-                }
+            if !isTooClose {
+                points.append(candidate)
             }
         }
     }
@@ -129,8 +121,9 @@ actor FrameProcessor {
                         group.addTask {
                             var partialResults = FrameResult(presentationTime: timestamp, state: .free, boxDetection: await self.currentBox)
                             let currentHandedness = await self.handedness
-                            
+
                             partialResults.hands = await self.detectnFilterHands(in: image, currentHandedness)
+                            partialResults.blockDetections = await blockDetector.detect(on: image)
                             self.partialResult(partialResults)
                             await self.resultContinuation?.yield((index, partialResults, image))
                         }
@@ -242,59 +235,16 @@ actor FrameProcessor {
     }
     
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
-        var nextResult = partialResult
+        var nextResult = partialResult   // blockDetections already set by parallel task
         let hands = nextResult.hands ?? []
         let currentBox = nextResult.boxDetection!
 
-        var blockROIs: [NormalizedRect] = []
-        switch currentState {
-        case .crossed:
-            if let handROI = defineBloackROI(by: hands, results, nextResult.presentationTime, currentBox, handedness) {
-                blockROIs.append(handROI)
-
-                blockROIs.append(contentsOf: pastBlockCenters.reduce(into: []) { result, blockCenter in
-                    let candidateROI = scaleROIcenter(blockCenter, blockSize: blockSize)
-
-                    if candidateROI.percentCovered(by: handROI) < FrameProcessingThresholds.roiOverlapThreshold {
-                        result.append(candidateROI)
-                    }
-                })
-            }
-
-        case .detecting:
-            if let roi = defineBloackROI(by: hands, results, nextResult.presentationTime, currentBox, handedness) {
-                blockROIs.append(roi)
-            }
-
-        case .crossedBack:
-            blockROIs.append(contentsOf: pastBlockCenters.map { center in
-                return scaleROIcenter(center, blockSize: blockSize)
-            })
-
-        default:
-            break
-        }
-
-        // This is problematic
-        var blockDetections: [BlockDetection] = []
-        for await blockDetection in blockDetector.perforAll(on: frame, in: blockROIs) {
-            var allBlocks = blockDetection
-            if var objects = allBlocks.objects {
-                objects.removeAll { block in
-                    isInvalidBlock(block, allBlocks.ROI, basedOn: hands.first, handedness) ||
-                    block.confidence < FrameProcessingThresholds.blockConfidenceThreshold
-                }
-                allBlocks.objects = objects
-            }
-            blockDetections.append(allBlocks)
-        }
-        let nextState = currentState.transition(by: hands, currentBox, blockDetections)
+        // Pass [] — ignoring block-driven state transitions for now
+        let nextState = currentState.transition(by: hands, currentBox, [])
 
         updateState(nextState)
         nextResult.blockTransfered = blockCounts
-
         nextResult.state = nextState
-        nextResult.blockDetections = blockDetections
         fullResult(nextResult, frame)
         results.append(nextResult)
     }
@@ -316,20 +266,20 @@ actor FrameProcessor {
     }
 
     /// Returns true if the block is above the wrist and on the right side of left hand (vice versa)
-    nonisolated func isInvalidBlock(_ block: RecognizedObjectObservation, _ roi: NormalizedRect, basedOn hand: HumanHandPoseObservation?, _ handedness: HumanHandPoseObservation.Chirality) -> Bool {
+    nonisolated func isInvalidBlock(_ block: BlockObservation, basedOn hand: HumanHandPoseObservation?, _ handedness: HumanHandPoseObservation.Chirality) -> Bool {
         guard let hand = hand else {
             return false
         }
-        
+
         // invalid - above the center and right of the right hand box
-        let blockPixel = block.boundingBox.toImageCoordinates(from: roi, imageSize: CameraSettings.resolution)
-        
+        let blockPixel = block.boundingBox.toImageCoordinates(CameraSettings.resolution)
+
         let handBBoxPixel = hand.boundingBox.toImageCoordinates(CameraSettings.resolution)
-        
+
         if blockPixel.midY < handBBoxPixel.midY {
             return false
         }
-        
+
         if handedness == .left {
             return blockPixel.midX > handBBoxPixel.midX
         } else {
@@ -407,27 +357,19 @@ actor FrameProcessor {
 
 
     /// Calculate the running average of past block bounding box centers
-    nonisolated func runningAverage(_ detections: [BlockDetection]) -> CGPoint? {
+    nonisolated func runningAverage(_ detections: [BlockObservation]) -> CGPoint? {
+        guard !detections.isEmpty else { return nil }
+
         var totalX: CGFloat = 0
         var totalY: CGFloat = 0
-        var count: CGFloat = 0
 
-        for detection in detections {
-            // Iterate only if objects exist
-            guard let objects = detection.objects else { continue }
-            
-            for object in objects {
-                let block = object.boundingBox.toImageCoordinates(from: detection.ROI, imageSize: CameraSettings.resolution)
-                totalX += block.midX
-                totalY += block.midY
-                count += 1
-            }
+        for block in detections {
+            let rect = block.boundingBox.toImageCoordinates(CameraSettings.resolution)
+            totalX += rect.midX
+            totalY += rect.midY
         }
 
-        // Avoid division by zero
-        guard count > 0 else { return nil }
-
-        return CGPoint(x: totalX / count, y: totalY / count)
+        return CGPoint(x: totalX / CGFloat(detections.count), y: totalY / CGFloat(detections.count))
     }
 
     nonisolated func scaleROIcenter(_ center: CGPoint, blockSize: Double) -> NormalizedRect {

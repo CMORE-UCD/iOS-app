@@ -16,7 +16,7 @@ struct FrameResult: Codable, Comparable, Sendable {
     var faces: [FaceObservation]?
     var boxDetection: BoxDetection?
     var hands: [HumanHandPoseObservation]?
-    var blockDetections: [BlockDetection] = []
+    var blockDetections: [BlockObservation] = []
     
     static func < (lhs: FrameResult, rhs: FrameResult) -> Bool {
         lhs.presentationTime < rhs.presentationTime
@@ -44,11 +44,6 @@ extension HumanHandPoseObservation : @retroactive BoundingBoxProviding {
             height: CGFloat(maxY - minY)
         )
     }
-}
-
-struct BlockDetection: Codable {
-    let ROI: NormalizedRect
-    var objects: [RecognizedObjectObservation]?
 }
 
 @propertyWrapper

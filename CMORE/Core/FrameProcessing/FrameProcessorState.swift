@@ -20,7 +20,7 @@ enum BlockCountingState: String, Codable {
 
     /// Compute the next state given the current hand observations, box geometry,
     /// and recent block detections.
-    func transition(by hands: [HumanHandPoseObservation], _ box: BoxDetection, _ blockDetections: [BlockDetection]) -> BlockCountingState {
+    func transition(by hands: [HumanHandPoseObservation], _ box: BoxDetection, _ blockDetections: [BlockObservation]) -> BlockCountingState {
         guard let hand = hands.first else {
             return self
         }
@@ -39,18 +39,10 @@ enum BlockCountingState: String, Codable {
 
         /// Block centers in frame coordinates (lazily computed).
         var blockCenters: [SIMD2<Double>] {
-            var result: [SIMD2<Double>] = []
-            for detection in blockDetections {
-                let roi = detection.ROI
-                guard let blocks = detection.objects else { continue }
-                for block in blocks {
-                    result.append(SIMD2<Double>(
-                        x: block.boundingBox.toImageCoordinates(from: roi, imageSize: CameraSettings.resolution).midX,
-                        y: block.boundingBox.toImageCoordinates(from: roi, imageSize: CameraSettings.resolution).midY
-                    ))
-                }
+            blockDetections.map { block in
+                let center = block.boundingBox.toImageCoordinates(CameraSettings.resolution)
+                return SIMD2<Double>(x: center.midX, y: center.midY)
             }
-            return result
         }
 
         switch self {
