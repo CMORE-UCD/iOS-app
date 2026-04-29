@@ -146,6 +146,14 @@ actor FrameProcessor {
         currentIndex += 1
     }
 
+    /// warmup the model on the neural engine.
+    func warmup() async {
+        let blank = CIImage(color: CIColor.black)
+            .cropped(to: CGRect(x: 0, y: 0, width: 640, height: 640))
+        dprint("FrameProcessor: Warming up block detector")
+        let _ = await blockDetector.detect(on: blank)
+    }
+
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
         self.handedness = handedness
         self.countingBlocks = true

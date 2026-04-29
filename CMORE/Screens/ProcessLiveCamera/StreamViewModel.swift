@@ -229,6 +229,7 @@ class StreamViewModel: ObservableObject {
 
         countdownTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            Task { await self.frameProcessor.warmup() }
             for tick in [3, 2, 1] {
                 guard !Task.isCancelled else { return }
                 self.countdown = tick
