@@ -8,3 +8,6 @@ CMORETests/TestResources/*
 # random stuff
 image.png
 instruction.md
+
+# docs for LLMs
+docs/
