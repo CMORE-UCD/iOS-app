@@ -3,7 +3,7 @@
 //  CMORE
 //
 
-import AVFoundation
+@preconcurrency import AVFoundation
 import SwiftUI
 
 @MainActor
@@ -23,8 +23,8 @@ class SessionReplayViewModel: ObservableObject {
     // MARK: - Private
 
     private var frameResults: [FrameResult] = []
-    private var timeObserverToken: Any?
-    private var endObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var timeObserverToken: Any?
+    nonisolated(unsafe) private var endObserver: NSObjectProtocol?
 
     init(session: Session) {
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

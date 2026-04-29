@@ -9,6 +9,7 @@ import Vision
 import AVFoundation
 import AudioToolbox
 
+@MainActor
 class StreamViewModel: ObservableObject {
     // MARK: - Published Properties
 
@@ -56,23 +57,23 @@ class StreamViewModel: ObservableObject {
 
         self.frameProcessor = FrameProcessor(
             onCross: { AudioServicesPlaySystemSound(1054) },
-            partialResult: { [weak self] result in
-                guard let self else { return }
-
-                if self.isRecording && self.recordingStartTime == nil {
-                    self.recordingStartTime = result.presentationTime
-                }
-
+            partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
+                    guard let self else { return }
+
+                    if self.isRecording && self.recordingStartTime == nil {
+                        self.recordingStartTime = result.presentationTime
+                    }
+
                     self.overlay = result
                 }
             }
         )
 
-        cameraManager.onRecordingFinished = { [weak self] url, error in
-            guard let self else { return }
-            
+        cameraManager.onRecordingFinished = { @Sendable [weak self] url, error in
             Task { @MainActor in
+                guard let self else { return }
+            
                 if let error = error {
                     print("Stream View Model: Recording error: \(error.localizedDescription)")
                     self.currentVideoURL = nil
@@ -83,11 +84,15 @@ class StreamViewModel: ObservableObject {
             }
         }
         
-        cameraManager.onFrameDrop = { [weak self] sampleBuffer in
-            guard let self else { return }
+        cameraManager.onFrameDrop = { @Sendable [weak self] sampleBuffer in
+            let timestamp = sampleBuffer.presentationTimeStamp
             
-            if self.isRecording && self.recordingStartTime == nil {
-                self.recordingStartTime = sampleBuffer.presentationTimeStamp
+            Task { @MainActor in
+                guard let self else { return }
+                
+                if self.isRecording && self.recordingStartTime == nil {
+                    self.recordingStartTime = timestamp
+                }
             }
         }
     }
@@ -158,14 +163,21 @@ class StreamViewModel: ObservableObject {
             videoFileName: videoURL.lastPathComponent,
             resultsFileName: resultsFileName
         )
-        SessionStore.shared.add(session)
-
-        // Clean up state
-        self.currentVideoURL = nil
-        self.result = nil
-        self.fileNameSuffix = nil
-        self.recordingStartTime = nil
-        self.showSaveConfirmation = false
+        
+        Task {
+            do {
+                try await SessionStore.shared.add(session)
+            } catch {
+                dprint("StreamViewModel: failed to save the recorded session!")
+            }
+            
+            // Clean up state
+            self.currentVideoURL = nil
+            self.result = nil
+            self.fileNameSuffix = nil
+            self.recordingStartTime = nil
+            self.showSaveConfirmation = false
+        }
     }
 
     /// Discards the pending recording (video file + in-memory results)
@@ -179,9 +191,7 @@ class StreamViewModel: ObservableObject {
         fileNameSuffix = nil
         recordingStartTime = nil
 
-        Task { @MainActor in
-            self.showSaveConfirmation = false
-        }
+        showSaveConfirmation = false
     }
 
     /// Starts the camera feed and begins frame processing

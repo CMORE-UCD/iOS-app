@@ -7,8 +7,7 @@
 
 import Foundation
 import Vision
-
-struct FrameResult: Codable, Comparable {
+struct FrameResult: Codable, Comparable, Sendable {
     @SecondsCoded var presentationTime: CMTime
     
     /// The state after the processing
@@ -17,7 +16,7 @@ struct FrameResult: Codable, Comparable {
     var faces: [FaceObservation]?
     var boxDetection: BoxDetection?
     var hands: [HumanHandPoseObservation]?
-    var blockDetections: [BlockDetection] = []
+    var blockDetections: [BlockObservation] = []
     
     static func < (lhs: FrameResult, rhs: FrameResult) -> Bool {
         lhs.presentationTime < rhs.presentationTime
@@ -47,13 +46,8 @@ extension HumanHandPoseObservation : @retroactive BoundingBoxProviding {
     }
 }
 
-struct BlockDetection: Codable {
-    let ROI: NormalizedRect
-    var objects: [RecognizedObjectObservation]?
-}
-
 @propertyWrapper
-struct SecondsCoded: Codable {
+struct SecondsCoded: Codable, Sendable {
     var wrappedValue: CMTime
 
     init(wrappedValue: CMTime) {

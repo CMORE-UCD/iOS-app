@@ -7,7 +7,7 @@
 import CoreML
 import Vision
 
-let INPUTSIZE = CGSize(width: 640, height: 640)
+nonisolated fileprivate let INPUTSIZE = CGSize(width: 640, height: 640)
 
 // MARK: - BoxDetector
 /// Claude generated
@@ -164,7 +164,7 @@ struct BoxDetector {
 
 // MARK: - Supporting Structures
 
-struct BoxDetection: Codable {
+nonisolated struct BoxDetection: Codable, Sendable {
     var centerX: Float = 0
     var centerY: Float = 0
     var width: Float = 0

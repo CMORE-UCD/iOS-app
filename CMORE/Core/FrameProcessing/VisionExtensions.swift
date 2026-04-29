@@ -13,7 +13,7 @@ extension HumanHandPoseObservation {
 }
 
 extension NormalizedRect {
-    func percentCovered(by other: NormalizedRect) -> CGFloat {
+    nonisolated func percentCovered(by other: NormalizedRect) -> CGFloat {
         let x1 = max(self.origin.x, other.origin.x)
         let y1 = max(self.origin.y, other.origin.y)
         let x2 = min(self.origin.x + self.width, other.origin.x + other.width)

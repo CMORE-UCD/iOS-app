@@ -7,6 +7,7 @@ import Vision
 import AVFoundation
 import UIKit
 
+@MainActor
 class VideoProcessingViewModel: ObservableObject {
     // MARK: - Published Properties
 
@@ -35,18 +36,20 @@ class VideoProcessingViewModel: ObservableObject {
 
     init() {
         self.frameProcessor = FrameProcessor(
-            fullResult: { [weak self] result, image in
-                guard let self else { return }
-
-                
-                let uiImage = renderFrame(image)
+            fullResult: { @Sendable [weak self] result, image in
                 Task { @MainActor in
+                    guard let self else { return }
+                    
+                    
+                    let uiImage = self.renderFrame(image)
+                    
                     self.overlay = result
                     self.currentFrame = uiImage
+                    
+                    
+                    // Each processed frame triggers the next one
+                    self.onFrameProcessed(result)
                 }
-
-                // Each processed frame triggers the next one
-                self.onFrameProcessed(result)
             }
         )
     }
@@ -212,6 +215,13 @@ class VideoProcessingViewModel: ObservableObject {
             videoFileName: videoFileName,
             resultsFileName: resultsFileName
         )
-        SessionStore.shared.add(session)
+        
+        Task {
+            do {
+                try await SessionStore.shared.add(session)
+            } catch{
+                dprint("Video Processing View Model: fail to save the session")
+            }
+        }
     }
 }

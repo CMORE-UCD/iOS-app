@@ -45,17 +45,17 @@ struct BlockCountTests {
         
         let expectedCount = 14
 
-        let vm = VideoProcessingViewModel()
-        vm.loadVideo(url: url)
+        let vm = await VideoProcessingViewModel()
+        await vm.loadVideo(url: url)
         await vm.startProcessing()
 
         // Wait for processing to complete
-        while !vm.isDone {
+        while await !vm.isDone {
             try await Task.sleep(for: .milliseconds(100))
         }
 
         // Read the block count from the last saved session
-        let sessions = SessionStore.shared.loadAll()
+        let sessions = try await SessionStore.shared.loadAll()
         let lastSession = try #require(sessions.first, "Should have saved a session")
         let blockCount = lastSession.blockCount
 
@@ -64,6 +64,6 @@ struct BlockCountTests {
                 "Expected \(expectedCount) blocks but counted \(blockCount)")
 
         // Clean up: remove the session created by the test
-        SessionStore.shared.delete(lastSession)
+        try await SessionStore.shared.delete(lastSession)
     }
 }

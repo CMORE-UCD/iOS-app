@@ -11,22 +11,14 @@ import Vision
 struct BoundingBoxView: View {
     let geo: GeometryProxy
     let normalizedBox: NormalizedRect
-    let roi: NormalizedRect?
     
-    init(_ geo: GeometryProxy, _ bbox: BoundingBoxProviding, from roi: NormalizedRect? = nil) {
+    init(_ geo: GeometryProxy, _ bbox: BoundingBoxProviding) {
         self.geo = geo
         self.normalizedBox = bbox.boundingBox
-        self.roi = roi
     }
 
     var body: some View {
-        let rect: CGRect = {
-            if let roi = roi {
-                return normalizedBox.toImageCoordinates(from: roi, imageSize: geo.size, origin: .upperLeft)
-            } else {
-                return normalizedBox.toImageCoordinates(geo.size, origin: .upperLeft)
-            }
-        }()
+        let rect: CGRect = normalizedBox.toImageCoordinates(geo.size, origin: .upperLeft)
         
         return Rectangle()
             .stroke(Color.red, lineWidth: 2)

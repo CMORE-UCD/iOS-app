@@ -100,7 +100,7 @@ struct VideoPicker: UIViewControllerRepresentable {
         }
 
         // MARK: - Helper
-        private func copyToTemp(from sourceURL: URL) {
+        private nonisolated func copyToTemp(from sourceURL: URL) {
             do {
                 let tempDir = FileManager.default.temporaryDirectory
                 let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension

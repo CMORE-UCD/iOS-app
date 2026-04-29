@@ -6,10 +6,10 @@
 //  recording, delegate callbacks, and video saving to Photos.
 //
 
-import UIKit
+import CoreImage
 import AVFoundation
 
-class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
+nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureFileOutputRecordingDelegate {
     // MARK: - Public Properties
 
     /// The camera capture session, exposed for use by CameraPreviewView
@@ -24,10 +24,10 @@ class CameraManager: NSObject, AVCaptureFileOutputRecordingDelegate {
     // MARK: - Callbacks
 
     /// Called when movie file recording finishes
-    var onRecordingFinished: ((URL, Error?) -> Void)!
+    var onRecordingFinished: (@Sendable (URL, Error?) -> Void)!
     
     /// Called when AVFoundation dropped a frame
-    var onFrameDrop: ((CMSampleBuffer) -> Void)!
+    var onFrameDrop: (@Sendable (CMSampleBuffer) -> Void)!
 
 
     // MARK: - Private Properties

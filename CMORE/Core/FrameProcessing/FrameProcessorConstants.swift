@@ -6,7 +6,7 @@
 import Foundation
 import AVFoundation
 
-enum FrameProcessingThresholds {
+nonisolated enum FrameProcessingThresholds {
     /// Minimum confidence to keep a detected block
     static let blockConfidenceThreshold: Float = 0.5
 

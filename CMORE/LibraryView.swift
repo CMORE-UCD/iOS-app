@@ -39,7 +39,10 @@ struct LibraryView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    SessionStore.shared.delete(session)
+                                    let id = session.id
+                                    Task {
+                                        try? await SessionStore.shared.delete(id)
+                                    }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }

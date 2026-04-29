@@ -8,7 +8,7 @@
 import AVFoundation
 import CoreGraphics
 
-struct CameraSettings {
+nonisolated struct CameraSettings {
     static let resolution: CGSize = CGSize(width: 1920, height: 1080)
     static let frameRate = 60.0
 }
