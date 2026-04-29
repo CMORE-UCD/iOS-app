@@ -66,7 +66,7 @@ class StreamViewModel: ObservableObject {
         cameraManager.setup()
 
         self.frameProcessor = FrameProcessor(
-            onCross: { AudioServicesPlaySystemSound(1054) },
+            onCross: { if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1054) } },
             partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
                     guard let self else { return }
@@ -245,7 +245,7 @@ class StreamViewModel: ObservableObject {
     }
 
     private func actuallyStartRecording() {
-        AudioServicesPlaySystemSound(1117) // "begin recording" chime
+        if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1117) } // "begin recording" chime
         isRecording = true
         recordingTimeRemaining = maxRecordingSeconds
 

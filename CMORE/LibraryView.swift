@@ -21,6 +21,7 @@ struct LibraryView: View {
     @State private var showValidationError = false
     @State private var validationErrorMessage = ""
     @State private var shareItems: [URL] = []
+    @AppStorage("soundMuted") private var soundMuted = false
 
     var body: some View {
         NavigationStack {
@@ -62,6 +63,13 @@ struct LibraryView: View {
                 }
             }
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { soundMuted.toggle() } label: {
+                        Image(systemName: soundMuted ? "bell.slash.fill" : "bell.fill")
+                    }
+                }
+            }
             .overlay(alignment: .bottom) {
                 Button {
                     showAddOptions = true
