@@ -24,9 +24,15 @@ class StreamViewModel: ObservableObject {
 
     /// Use to help identify which hand we are looking at
     @Published var handedness: HumanHandPoseObservation.Chirality = .right
-    
+
     /// Ask user for a box when not seen one.
     @Published var askForBox = false
+
+    /// Countdown value (3, 2, 1) before recording starts; nil when not counting down
+    @Published var countdown: Int? = nil
+
+    /// Seconds remaining in the current recording (counts down from maxRecordingSeconds)
+    @Published var recordingTimeRemaining: Int = 60
 
     /// The main camera capture session — forwarded from CameraManager
     var captureSession: AVCaptureSession? { cameraManager.captureSession }
@@ -50,13 +56,17 @@ class StreamViewModel: ObservableObject {
     /// Processes each frame through it
     private var frameProcessor: FrameProcessor!
 
+    private let maxRecordingSeconds = 60
+    private var countdownTask: Task<Void, Never>?
+    private var recordingTimerTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     init() {
         cameraManager.setup()
 
         self.frameProcessor = FrameProcessor(
-            onCross: { AudioServicesPlaySystemSound(1054) },
+            onCross: { if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1054) } },
             partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
                     guard let self else { return }
@@ -105,7 +115,11 @@ class StreamViewModel: ObservableObject {
 
     /// Toggles video recording on/off (main functionality)
     func toggleRecording() {
-        if isRecording {
+        if countdown != nil {
+            countdownTask?.cancel()
+            countdownTask = nil
+            countdown = nil
+        } else if isRecording {
             stopRecording()
         } else {
             startRecording()
@@ -113,7 +127,7 @@ class StreamViewModel: ObservableObject {
     }
 
     func toggleHandedness() {
-        guard !isRecording else {
+        guard !isRecording && countdown == nil else {
             print("Stream View Model: Handedness change not allowed after recording started!")
             return
         }
@@ -205,30 +219,41 @@ class StreamViewModel: ObservableObject {
 
     // MARK: - Private Methods
 
-    /// Starts video recording to a file
+    /// Runs the 3-second countdown then starts video recording
     private func startRecording() {
-        guard !isRecording else {
-            #if DEBUG
-            print("Stream viewModel: Already recording!")
-            #endif
-            return
-        }
+        guard !isRecording && countdown == nil else { return }
         guard overlay?.boxDetection != nil else {
-            Task { @MainActor in
-                self.askForBox = true
-            }
+            askForBox = true
             return
         }
 
+        countdownTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            Task { await self.frameProcessor.warmup() }
+            for tick in [3, 2, 1] {
+                guard !Task.isCancelled else { return }
+                self.countdown = tick
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            guard !Task.isCancelled else {
+                self.countdown = nil
+                return
+            }
+            self.countdown = nil
+            self.actuallyStartRecording()
+        }
+    }
+
+    private func actuallyStartRecording() {
+        if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1117) } // "begin recording" chime
         isRecording = true
+        recordingTimeRemaining = maxRecordingSeconds
 
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let suffix = Date().timeIntervalSince1970
-
         let videoFileName = "CMORE_Recording_\(suffix).mov"
         fileNameSuffix = String(suffix)
         let outputURL = documentsPath.appendingPathComponent(videoFileName)
-
         currentVideoURL = outputURL
 
         cameraManager.startRecording(to: outputURL)
@@ -236,12 +261,28 @@ class StreamViewModel: ObservableObject {
         Task {
             await frameProcessor.startCountingBlocks(for: handedness, box: (overlay?.boxDetection)!)
         }
+
+        recordingTimerTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var remaining = self.maxRecordingSeconds
+            while remaining > 0 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                remaining -= 1
+                self.recordingTimeRemaining = remaining
+            }
+            if !Task.isCancelled {
+                self.stopRecording()
+            }
+        }
     }
 
     /// Stops video recording
     private func stopRecording() {
         guard isRecording else { return }
 
+        recordingTimerTask?.cancel()
+        recordingTimerTask = nil
         isRecording = false
 
         Task {

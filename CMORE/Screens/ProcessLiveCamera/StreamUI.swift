@@ -25,8 +25,20 @@ struct StreamUI: View {
                     .padding(.top, 5)
                 Spacer()
             }
-            
-            
+
+            // Recording time remaining (bottom-left while recording)
+            if viewModel.isRecording {
+                VStack {
+                    Spacer()
+                    HStack {
+                        RecordingTimerView(seconds: viewModel.recordingTimeRemaining)
+                            .padding(.leading, 12)
+                            .padding(.bottom, 20)
+                        Spacer()
+                    }
+                }
+            }
+
             HStack{
                 Spacer()
                 MovieCaptureButton(isRecording: $viewModel.isRecording, action: { _ in
@@ -35,7 +47,11 @@ struct StreamUI: View {
                 .aspectRatio(1.0, contentMode: .fit)
                 .frame(width: 68)
                 .padding(.trailing, 5)
-                
+            }
+
+            // Countdown overlay
+            if let count = viewModel.countdown {
+                CountdownOverlayView(count: count)
             }
         }
         .background(Color.clear)
@@ -157,6 +173,43 @@ struct HandednessIndicator: View {
                 .fill(Color.black.opacity(0.3))
                 .blur(radius: 1)
         )
+    }
+}
+
+struct CountdownOverlayView: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(size: 120, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 4)
+            .transition(.scale.combined(with: .opacity))
+            .id(count)
+    }
+}
+
+struct RecordingTimerView: View {
+    let seconds: Int
+
+    private var formatted: String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(.red)
+                .frame(width: 8, height: 8)
+            Text(formatted)
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.55), in: Capsule())
     }
 }
 
