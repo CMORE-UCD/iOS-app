@@ -245,6 +245,7 @@ class StreamViewModel: ObservableObject {
     }
 
     private func actuallyStartRecording() {
+        AudioServicesPlaySystemSound(1117) // "begin recording" chime
         isRecording = true
         recordingTimeRemaining = maxRecordingSeconds
 
