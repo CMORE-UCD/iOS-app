@@ -46,8 +46,8 @@ class VideoFrameExtractor {
             return "Video resolution must be at least 1280x720 (got \(Int(width))x\(Int(height)))"
         }
 
-        if fps < 30 {
-            return "Video must be at least 30fps (got \(Int(fps))fps)"
+        if fps < 29 {
+            return "Video must be at least 29fps (got \(Int(fps))fps)"
         }
 
         return nil
