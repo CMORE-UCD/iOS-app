@@ -53,6 +53,7 @@ nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureF
             try camera.lockForConfiguration()
 
             camera.activeFormat = format
+            camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(CameraSettings.frameRate))
             camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: Int32(CameraSettings.frameRate))
 
             camera.unlockForConfiguration()
@@ -203,19 +204,25 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let yieldResult = frameContinuation?.yield((ciImage, currentTime))
+
+        // Send every other frame to the processing pipeline to halve the load.
+        // movieOutput receives all frames independently through the capture session.
+        var yieldResult: AsyncStream<(CIImage, CMTime)>.Continuation.YieldResult? = nil
+        if frameNum % 2 == 0 {
+            yieldResult = frameContinuation?.yield((ciImage, currentTime))
+        }
         frameNum += 1
-        
+
         #if DEBUG
         print(String(repeating: "-", count: 50))
         print("Camera manager: Frame number: \(frameNum)")
-        
+
         switch yieldResult {
         case .dropped(_):
             print("Camera Stream: Dropped oldest frame in the queue, currently full with \(FrameProcessingThresholds.frameBufferSize + 1) frames")
         case .enqueued(let remaining):
             print("Camera Stream: Currently \(remaining) slots remaining in the buffer queue")
-            
+
             if let last = lastTimestamp {
                 let delta = (currentTime - last).seconds
                 let actualFps = 1.0 / delta
@@ -226,6 +233,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             print("Camera Stream: Stream terminated")
             frameNum = 0
         case .none:
+            print("Camera Stream: skipped frame intentionally")
             fallthrough
         @unknown default:
             break
