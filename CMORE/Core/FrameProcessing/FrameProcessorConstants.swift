@@ -33,4 +33,7 @@ nonisolated enum FrameProcessingThresholds {
     
     /// Maximum number of image process task processed concurrently
     static let maxConcurrentTasks: Int = 6
+
+    /// Time interval for updating box 
+    static let boxUpdateInterval: CMTime = CMTime(value: 1, timescale: 1) // 1 second
 }
