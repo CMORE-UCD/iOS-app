@@ -50,7 +50,6 @@ actor FrameProcessor {
     public private(set) var blockCounts = 0
 
     private var results: [FrameResult] = []
-    private var boxLastUpdated: CMTime = .zero
     private var currentBox: BoxDetection?
     private var currentState: BlockCountingState = .free
     private var handedness: HumanHandPoseObservation.Chirality = .right
@@ -119,6 +118,11 @@ actor FrameProcessor {
                                 hands: await hands,
                                 blockDetections: await blocks,
                             )
+
+                            // Update box if a new one is detected in this frame
+                            if detectBoxInThisFrame, let newBox = await box {
+                                await self.updateBox(newBox)
+                            }
 
                             self.partialResult(result)
                             await self.resultContinuation?.yield((taskIndex, result, image))
@@ -219,10 +223,8 @@ actor FrameProcessor {
         currentState = newState
     }
 
-    private func updateBox(from box: BoxDetection, at time: CMTime) {
-        if boxLastUpdated < time {
-            currentBox = box
-        }
+    private func updateBox(_ box: BoxDetection) {
+        currentBox = box
     }
 
     private func appendResult(_ result: FrameResult) {
