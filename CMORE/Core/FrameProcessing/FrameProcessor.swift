@@ -126,7 +126,8 @@ actor FrameProcessor {
     }
 
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
-        self.counter = Counter(
+        countingBlocks = true
+        counter = Counter(
             handedness: handedness,
             state: .free,
             blockCounts: 0,
@@ -140,7 +141,7 @@ actor FrameProcessor {
             bufferingPolicy: .unbounded
         )
         
-        self.resultContinuation = continuation
+        resultContinuation = continuation
 
         // Serial consumer: state machine processing
         processingTask = Task { [weak self] in

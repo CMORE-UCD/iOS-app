@@ -32,6 +32,7 @@ struct Counter {
             presentationTime: detection.presentationTime,
             state: state,
             blockTransfered: blockCounts,
+            boxDetection: box,
             hands: detection.hands,
             blockDetections: detection.blockDetections
         )
