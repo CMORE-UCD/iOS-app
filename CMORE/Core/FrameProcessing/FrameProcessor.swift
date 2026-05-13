@@ -10,30 +10,11 @@ import CoreImage
 import Vision
 import simd
 
-// MARK: - error types
-nonisolated fileprivate enum FrameProcessorError: Error {
-    case handBoxProjectionFailed
-}
-
 // MARK: - constants safe to parallel
 fileprivate let handsRequest = DetectHumanHandPoseRequest()
 fileprivate let facesRequest = DetectFaceRectanglesRequest()
 fileprivate let blockDetector = BlockDetector()
 fileprivate let boxDetector = BoxDetector()
-
-/// Detected and filter out the wrong hand by handedness, nil handedness are kepts
-fileprivate func detectnFilterHands(in image: CIImage, _ handedness: HumanHandPoseObservation.Chirality) async -> [HumanHandPoseObservation]? {
-    guard let allHands = try? await handsRequest.perform(on: image) else {
-        return nil
-    }
-    let hands = allHands.filter { hand in
-        return hand.chirality == nil || hand.chirality == handedness
-    }
-    guard !hands.isEmpty else {
-        return nil
-    }
-    return hands
-}
 
 // MARK: - Frame Processor
 actor FrameProcessor {
@@ -46,13 +27,8 @@ actor FrameProcessor {
 
     // MARK: - Stateful properties
 
-    public private(set) var countingBlocks = false
-    public private(set) var blockCounts = 0
-
-    private var results: [FrameResult] = []
-    private var currentBox: BoxDetection?
-    private var currentState: BlockCountingState = .free
-    private var handedness: HumanHandPoseObservation.Chirality = .right
+    private var countingBlocks = false
+    private var counter: Counter?
 
     /// Single persistent stream consumer — never cancelled/restarted
     private var mainTask: Task<Void, Never>?
@@ -66,7 +42,7 @@ actor FrameProcessor {
     // MARK: - Computed properties
 
     private var blockSize: Double {
-        guard let box = currentBox else { fatalError("No box exist!") }
+        guard let box = counter?.box else { fatalError("No box exist!") }
         return blockLengthInPixels(scale: box.cmPerPixel)
     }
 
@@ -110,7 +86,7 @@ actor FrameProcessor {
                             // Parallel tasks: hand, block, and box detection
                             async let hands = try? handsRequest.perform(on: image)
                             async let blocks = blockDetector.detect(on: image)
-                            async let box = detectBoxInThisFrame ? boxDetector.detect(on: image) : self.currentBox
+                            async let box: BoxDetection? = detectBoxInThisFrame ? boxDetector.detect(on: image) : nil
 
                             let result = FrameResult(
                                 presentationTime: timestamp,
@@ -118,11 +94,6 @@ actor FrameProcessor {
                                 hands: await hands,
                                 blockDetections: await blocks,
                             )
-
-                            // Update box if a new one is detected in this frame
-                            if detectBoxInThisFrame, let newBox = await box {
-                                await self.updateBox(newBox)
-                            }
 
                             self.partialResult(result)
                             await self.resultContinuation?.yield((taskIndex, result, image))
@@ -155,9 +126,13 @@ actor FrameProcessor {
     }
 
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
-        self.handedness = handedness
-        self.countingBlocks = true
-        self.currentBox = box
+        self.counter = Counter(
+            handedness: handedness,
+            state: .free,
+            blockCounts: 0,
+            box: box,
+            results: []
+        )
 
         // Create reordering stream
         let (stream, continuation) = AsyncStream.makeStream(
@@ -196,54 +171,31 @@ actor FrameProcessor {
 
         processingTask = nil
 
-        let resultsToReturn = results
+        let resultsToReturn = counter?.results ?? []
         #if DEBUG
         print("Frame processor: returned results count \(resultsToReturn.count)")
         #endif
 
         // Reset state — mainTask automatically resumes pre-counting mode
         countingBlocks = false
-        results.removeAll()
-        currentBox = nil
-        currentState = .free
-        blockCounts = 0
+        counter = nil
 
         return resultsToReturn
     }
 
     // MARK: - Private functions
     
-    private func updateState(_ newState: BlockCountingState) {
-        if newState == .crossed && self.currentState != .crossed {
-            onCrossed()
-        } else if (currentState == .crossed && newState == .released) ||
-                    (currentState == .crossedBack && newState == .released) {
-            blockCounts += 1
-        }
-        currentState = newState
-    }
-
-    private func updateBox(_ box: BoxDetection) {
-        currentBox = box
-    }
-
-    private func appendResult(_ result: FrameResult) {
-        results.append(result)
-    }
-    
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
-        var nextResult = partialResult   // blockDetections already set by parallel task
-        let hands = nextResult.hands ?? []
-        let currentBox = nextResult.boxDetection!
+        guard var counter = counter else { fatalError("Frame Processor: counter is nil") }
+        let previousState = counter.state
 
-        // Pass [] — ignoring block-driven state transitions for now
-        let nextState = currentState.transition(by: hands, currentBox, [])
+        let result: FrameResult = counter.update(with: partialResult)
 
-        updateState(nextState)
-        nextResult.blockTransfered = blockCounts
-        nextResult.state = nextState
-        fullResult(nextResult, frame)
-        results.append(nextResult)
+        if previousState != .crossed, result.state == .crossed {
+            onCrossed()
+        }
+
+        fullResult(result, frame)
     }
 }
 
