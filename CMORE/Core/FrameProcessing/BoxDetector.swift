@@ -6,30 +6,33 @@
 //
 import CoreML
 import Vision
+import CoreImage
 
 nonisolated fileprivate let INPUTSIZE = CGSize(width: 640, height: 640)
 
 // MARK: - BoxDetector
-/// Claude generated
 struct BoxDetector {
-    static func createBoxDetectionRequest() -> CoreMLRequest {
-        let model = try? KeypointDetector()
-        
-        guard let boxDetector = model else {
+    private let request: CoreMLRequest
+
+    init() {
+        guard let model = try? KeypointDetector() else {
             fatalError("Failed to load KeypointDetector model")
         }
-        
-        guard let boxDetectorContainer = try? CoreMLModelContainer(model: boxDetector.model) else {
+        guard let modelContainer = try? CoreMLModelContainer(model: model.model) else {
             fatalError("Failed to convert KeypointDetector model to MLModelContainer")
         }
-        
-        var request = CoreMLRequest(model: boxDetectorContainer)
-        request.cropAndScaleAction = .scaleToFit
-        
-        return request
+        var req = CoreMLRequest(model: modelContainer)
+        req.cropAndScaleAction = .scaleToFit
+        self.request = req
     }
-    
-    
+
+    func detect(on image: CIImage) async -> BoxDetection? {
+        guard let obs = try? await request.perform(on: image) else { return nil }
+        guard let shapedArray = (obs as! [CoreMLFeatureValueObservation]).first?
+            .featureValue.shapedArrayValue(of: Float.self) else { return nil }
+        return BoxDetector.processKeypointOutput(shapedArray)
+    }
+
     /// Processes the raw model output to extract keypoints
     static func processKeypointOutput(_ shapedArray: MLShapedArray<Float>, confThresh objectConfThreshold: Float = 0.2, IOUThreshold: Float = 0.5) -> BoxDetection? {
         // Following YOLO pose format:

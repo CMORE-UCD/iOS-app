@@ -10,31 +10,11 @@ import CoreImage
 import Vision
 import simd
 
-// MARK: - error types
-nonisolated fileprivate enum FrameProcessorError: Error {
-    case handBoxProjectionFailed
-}
-
 // MARK: - constants safe to parallel
 fileprivate let handsRequest = DetectHumanHandPoseRequest()
 fileprivate let facesRequest = DetectFaceRectanglesRequest()
 fileprivate let blockDetector = BlockDetector()
-fileprivate let boxRequest = BoxDetector.createBoxDetectionRequest()
-
-
-/// Detected and filter out the wrong hand by handedness, nil handedness are kepts
-fileprivate func detectnFilterHands(in image: CIImage, _ handedness: HumanHandPoseObservation.Chirality) async -> [HumanHandPoseObservation]? {
-    guard let allHands = try? await handsRequest.perform(on: image) else {
-        return nil
-    }
-    let hands = allHands.filter { hand in
-        return hand.chirality == nil || hand.chirality == handedness
-    }
-    guard !hands.isEmpty else {
-        return nil
-    }
-    return hands
-}
+fileprivate let boxDetector = BoxDetector()
 
 // MARK: - Frame Processor
 actor FrameProcessor {
@@ -47,10 +27,8 @@ actor FrameProcessor {
 
     // MARK: - Stateful properties
 
-    public private(set) var countingBlocks = false
-    public private(set) var blockCounts = 0
-    
-    private var results: [FrameResult] = []
+    private var countingBlocks = false
+    private var counter: Counter?
 
     /// Single persistent stream consumer — never cancelled/restarted
     private var mainTask: Task<Void, Never>?
@@ -61,19 +39,10 @@ actor FrameProcessor {
     /// Feeds frames into the counting pipeline when countingBlocks == true
     private var resultContinuation: AsyncStream<(Int, FrameResult, CIImage)>.Continuation?
 
-    /// Used for reordering the results
-    private var currentIndex: Int = 0
-
-    /// Stateful information
-    private var boxLastUpdated: CMTime = .zero
-    private var currentBox: BoxDetection?
-    private var currentState: BlockCountingState = .free
-    private var handedness: HumanHandPoseObservation.Chirality = .right
-
     // MARK: - Computed properties
 
     private var blockSize: Double {
-        guard let box = currentBox else { fatalError("No box exist!") }
+        guard let box = counter?.box else { fatalError("No box exist!") }
         return blockLengthInPixels(scale: box.cmPerPixel)
     }
 
@@ -97,40 +66,46 @@ actor FrameProcessor {
             let maxConcurrentTasks = FrameProcessingThresholds.maxConcurrentTasks
             await withTaskGroup(of: Void.self) { group in
                 var activeTasks = 0
-                
+                var index = 0
+                var lastBoxUpdateTime: CMTime = .zero
+
                 for await (image, timestamp) in stream {
                     guard let self, !Task.isCancelled else { break }
-                    
+
                     if activeTasks >= maxConcurrentTasks {
                         await group.next()
                         activeTasks -= 1
                     }
 
                     if await self.countingBlocks {
-                        let index = await self.currentIndex
-                        await self.incrementIdx()
+                        let taskIndex = index
+                        let detectBoxInThisFrame = timestamp - lastBoxUpdateTime > FrameProcessingThresholds.boxUpdateInterval
+                        if detectBoxInThisFrame { lastBoxUpdateTime = timestamp }
                         
                         group.addTask {
-                            var partialResults = FrameResult(presentationTime: timestamp, state: .free, boxDetection: await self.currentBox)
-                            let currentHandedness = await self.handedness
-
-                            partialResults.hands = try? await handsRequest.perform(on: image)
-                            partialResults.blockDetections = await blockDetector.detect(on: image)
-                            self.partialResult(partialResults)
-                            await self.resultContinuation?.yield((index, partialResults, image))
-                        }
-                    } else {
-                        // Pre-counting: box detection for overlay
-                        group.addTask {
-                            var boxDetected: BoxDetection?
-                            if let boxRequestResult = try? await boxRequest.perform(on: image) as? [CoreMLFeatureValueObservation],
-                               let outputArray = boxRequestResult.first?.featureValue.shapedArrayValue(of: Float.self) {
-                                boxDetected = BoxDetector.processKeypointOutput(outputArray)
-                            }
+                            // Parallel tasks: hand, block, and box detection
+                            async let hands = try? handsRequest.perform(on: image)
+                            async let blocks = blockDetector.detect(on: image)
+                            async let box: BoxDetection? = detectBoxInThisFrame ? boxDetector.detect(on: image) : nil
 
                             let result = FrameResult(
                                 presentationTime: timestamp,
-                                boxDetection: boxDetected
+                                boxDetection: await box,
+                                hands: await hands,
+                                blockDetections: await blocks,
+                            )
+
+                            self.partialResult(result)
+                            await self.resultContinuation?.yield((taskIndex, result, image))
+                        }
+                        
+                        index += 1
+                    } else {
+                        // Pre-counting: box detection for overlay
+                        group.addTask {
+                            let result = FrameResult(
+                                presentationTime: timestamp,
+                                boxDetection: await boxDetector.detect(on: image)
                             )
                             self.partialResult(result)
                             self.fullResult(result, image)
@@ -140,10 +115,6 @@ actor FrameProcessor {
                 }
             }
         }
-    }
-    
-    func incrementIdx() {
-        currentIndex += 1
     }
 
     /// warmup the model on the neural engine.
@@ -155,10 +126,14 @@ actor FrameProcessor {
     }
 
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
-        self.handedness = handedness
-        self.countingBlocks = true
-        self.currentBox = box
-        self.currentIndex = 0
+        countingBlocks = true
+        counter = Counter(
+            handedness: handedness,
+            state: .free,
+            blockCounts: 0,
+            box: box,
+            results: []
+        )
 
         // Create reordering stream
         let (stream, continuation) = AsyncStream.makeStream(
@@ -166,7 +141,7 @@ actor FrameProcessor {
             bufferingPolicy: .unbounded
         )
         
-        self.resultContinuation = continuation
+        resultContinuation = continuation
 
         // Serial consumer: state machine processing
         processingTask = Task { [weak self] in
@@ -197,64 +172,31 @@ actor FrameProcessor {
 
         processingTask = nil
 
-        let resultsToReturn = results
+        let resultsToReturn = counter?.results ?? []
         #if DEBUG
         print("Frame processor: returned results count \(resultsToReturn.count)")
         #endif
 
         // Reset state — mainTask automatically resumes pre-counting mode
         countingBlocks = false
-        results.removeAll()
-        currentBox = nil
-        currentState = .free
-        blockCounts = 0
+        counter = nil
 
         return resultsToReturn
     }
 
     // MARK: - Private functions
     
-    private func updateState(_ newState: BlockCountingState) {
-        if newState == .crossed && self.currentState != .crossed {
-            onCrossed()
-        } else if (currentState == .crossed && newState == .released) ||
-                    (currentState == .crossedBack && newState == .released) {
-            blockCounts += 1
-        }
-        currentState = newState
-    }
-
-    private func updateBox(from box: BoxDetection, at time: CMTime) {
-        if boxLastUpdated < time {
-            currentBox = box
-        }
-    }
-
-    private func appendResult(_ result: FrameResult) {
-        results.append(result)
-    }
-    
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
-        var nextResult = partialResult   // blockDetections already set by parallel task
-        let hands = nextResult.hands ?? []
-        let currentBox = nextResult.boxDetection!
+        guard var counter = counter else { fatalError("Frame Processor: counter is nil") }
+        let previousState = counter.state
 
-        // Pass [] — ignoring block-driven state transitions for now
-        let nextState = currentState.transition(by: hands, currentBox, [])
+        let result: FrameResult = counter.update(with: partialResult)
 
-        updateState(nextState)
-        nextResult.blockTransfered = blockCounts
-        nextResult.state = nextState
-        fullResult(nextResult, frame)
-        results.append(nextResult)
-    }
-    
-    // MARK: - Pure functions
+        if previousState != .crossed, result.state == .crossed {
+            onCrossed()
+        }
 
-    /// Returns true if the block is above the wrist and on the right side of left hand (vice versa)
-    nonisolated func isInvalidBlock(_ block: BlockObservation, basedOn hand: HumanHandPoseObservation?, _ handedness: HumanHandPoseObservation.Chirality) -> Bool {
-        // TODO:
-        return true
+        fullResult(result, frame)
     }
 }
 

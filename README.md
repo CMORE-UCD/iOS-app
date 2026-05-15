@@ -14,5 +14,5 @@ git lfs pull
 open CMORE.xcodeproj
 ```
 
-# Use the app
-need to update 
+# Potential Bug
+Only works with `1080x1920` since `camerasettings.resolution` is used everywhere...
