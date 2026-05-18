@@ -40,7 +40,7 @@ enum BlockCountingState: String, Codable {
         /// Block centers in frame coordinates (lazily computed).
         var blockCenters: [SIMD2<Double>] {
             blockDetections.map { block in
-                let center = block.boundingBox.toImageCoordinates(in: resolution)
+                let center = block.boundingBox.toImageCoordinates(resolution)
                 return SIMD2<Double>(x: center.midX, y: center.midY)
             }
         }
