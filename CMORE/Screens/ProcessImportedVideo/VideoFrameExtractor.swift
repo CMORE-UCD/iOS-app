@@ -42,7 +42,7 @@ class VideoFrameExtractor {
         let width = max(size.width, size.height)
         let height = min(size.width, size.height)
 
-        if width < 1280 || height < 720 {
+        if width <= 1280 || height <= 720 {
             return "Video resolution must be at least 1280x720 (got \(Int(width))x\(Int(height)))"
         }
 
