@@ -18,13 +18,15 @@ struct VideoBatchTests {
 
     private func allVideoURLs() -> [URL] {
         let bundle = Bundle(for: BatchBundleAnchor.self)
+        // Xcode copies resources flat into the bundle root — no TestResources subfolder at runtime
         guard let resourceURL = bundle.resourceURL else { return [] }
 
-        let testResourcesURL = resourceURL.appendingPathComponent("TestResources")
+        print("Bundle resource URL: \(resourceURL.path)")
+
         let extensions: Set<String> = ["MOV", "mov", "mp4", "MP4", "m4v", "M4V"]
 
         guard let enumerator = FileManager.default.enumerator(
-            at: testResourcesURL,
+            at: resourceURL,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else { return [] }
@@ -45,6 +47,10 @@ struct VideoBatchTests {
         print("Cleared \(existingSessions.count) existing session(s)")
 
         let urls = allVideoURLs()
+        guard !urls.isEmpty else {
+            Issue.record("No video files found in the test bundle — check that .MOV/.mp4 files are added to the CMORETests target in Xcode")
+            return
+        }
         print("\n=== Batch Block Count: \(urls.count) video(s) ===\n")
 
         for url in urls {
