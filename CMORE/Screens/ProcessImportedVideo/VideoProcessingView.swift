@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Vision
+import AVFoundation
 
 struct VideoProcessingView: View {
     @StateObject private var viewModel = VideoProcessingViewModel()
@@ -13,9 +14,7 @@ struct VideoProcessingView: View {
     let videoURL: URL
     let handedness: HumanHandPoseObservation.Chirality
 
-    private var streamAspect: CGFloat {
-        CameraSettings.resolution.width / CameraSettings.resolution.height
-    }
+    @State private var videoAspect: CGFloat = 16.0 / 9.0
 
     var body: some View {
         ZStack {
@@ -37,7 +36,7 @@ struct VideoProcessingView: View {
                     }
                 }
             }
-            .aspectRatio(streamAspect, contentMode: .fit)
+            .aspectRatio(videoAspect, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // UI overlay
@@ -85,6 +84,11 @@ struct VideoProcessingView: View {
             }
         }
         .task {
+            let asset = AVURLAsset(url: videoURL)
+            if let track = try? await asset.loadTracks(withMediaType: .video).first,
+               let size = try? await track.load(.naturalSize), size.width > 0 {
+                videoAspect = abs(size.width / size.height)
+            }
             await viewModel.startProcessing()
         }
         .onChange(of: viewModel.isDone) { _, isDone in

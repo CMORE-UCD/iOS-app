@@ -20,7 +20,7 @@ enum BlockCountingState: String, Codable {
 
     /// Compute the next state given the current hand observations, box geometry,
     /// and recent block detections.
-    func transition(by hands: [HumanHandPoseObservation], _ box: BoxDetection, _ blockDetections: [BlockObservation]) -> BlockCountingState {
+    func transition(by hands: [HumanHandPoseObservation], _ box: BoxDetection, _ blockDetections: [BlockObservation], in resolution: CGSize = CameraSettings.resolution) -> BlockCountingState {
         guard let hand = hands.first else {
             return self
         }
@@ -40,7 +40,7 @@ enum BlockCountingState: String, Codable {
         /// Block centers in frame coordinates (lazily computed).
         var blockCenters: [SIMD2<Double>] {
             blockDetections.map { block in
-                let center = block.boundingBox.toImageCoordinates(CameraSettings.resolution)
+                let center = block.boundingBox.toImageCoordinates(in: resolution)
                 return SIMD2<Double>(x: center.midX, y: center.midY)
             }
         }
@@ -94,7 +94,7 @@ enum BlockCountingState: String, Codable {
 /// - Parameters:
 ///   - divider: Tuple of three points (front/top, front/middle, back/top) as [x, y] in image space.
 ///   - keypoints: Hand joints to test.
-func isCrossed(divider: (Keypoint, Keypoint, Keypoint), _ joints: [Joint], handedness: HumanHandPoseObservation.Chirality) -> Bool {
+func isCrossed(divider: (Keypoint, Keypoint, Keypoint), _ joints: [Joint], handedness: HumanHandPoseObservation.Chirality, in resolution: CGSize = CameraSettings.resolution) -> Bool {
     let (frontTop, frontMiddle, backTop) = divider
 
     // Compute the divider's x-position for a given y by clamping to the end points
@@ -138,8 +138,8 @@ func isCrossed(divider: (Keypoint, Keypoint, Keypoint), _ joints: [Joint], hande
     }
 
     return joints.contains { joint in
-        let x = Float(joint.location.x * CameraSettings.resolution.width)
-        let y = Float(joint.location.y * CameraSettings.resolution.height)
+        let x = Float(joint.location.x * resolution.width)
+        let y = Float(joint.location.y * resolution.height)
         switch handedness {
             case .left:
                 return x < dividerX(at: y)
@@ -152,23 +152,23 @@ func isCrossed(divider: (Keypoint, Keypoint, Keypoint), _ joints: [Joint], hande
 }
 
 /// Returns true if any joints if above the horizon. Assume y increase upwards
-func isAbove(of horizon: Float, _ keypoints: [Joint]) -> Bool {
+func isAbove(of horizon: Float, _ keypoints: [Joint], in resolution: CGSize = CameraSettings.resolution) -> Bool {
     for joint in keypoints {
-        if Float(joint.location.y * CameraSettings.resolution.height) > horizon {
+        if Float(joint.location.y * resolution.height) > horizon {
             return true
         }
     }
     return false
 }
 
-func isBlockApart(from hand: HumanHandPoseObservation, distanceThreshold: Double, _ blockCenters: [SIMD2<Double>]) -> Bool {
+func isBlockApart(from hand: HumanHandPoseObservation, distanceThreshold: Double, _ blockCenters: [SIMD2<Double>], in resolution: CGSize = CameraSettings.resolution) -> Bool {
     
     guard !blockCenters.isEmpty else { return false }
     
     let fingerTips = hand.fingerTips.map { joint in
         SIMD2<Double>(
-            x: joint.location.x * CameraSettings.resolution.width,
-            y: joint.location.y * CameraSettings.resolution.height
+            x: joint.location.x * resolution.width,
+            y: joint.location.y * resolution.height
         )
     }
 

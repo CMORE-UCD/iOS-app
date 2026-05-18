@@ -200,10 +200,10 @@ nonisolated struct BoxDetection: Codable, Sendable {
         return keypoints[idx]
     }
     
-    func normalizedKeypoint(for name: String) -> NormalizedPoint{
+    func normalizedKeypoint(for name: String, in resolution: CGSize = CameraSettings.resolution) -> NormalizedPoint{
         return NormalizedPoint(
-            x: CGFloat(self[name].position.x) / CameraSettings.resolution.width,
-            y: CGFloat(self[name].position.y) / CameraSettings.resolution.height
+            x: CGFloat(self[name].position.x) / resolution.width,
+            y: CGFloat(self[name].position.y) / resolution.height
         )
     }
 }

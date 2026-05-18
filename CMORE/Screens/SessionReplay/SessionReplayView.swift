@@ -46,10 +46,6 @@ struct SessionReplayView: View {
         _viewModel = StateObject(wrappedValue: SessionReplayViewModel(session: session))
     }
 
-    private var videoAspect: CGFloat {
-        CameraSettings.resolution.width / CameraSettings.resolution.height
-    }
-
     var body: some View {
         ZStack {
             Color.black
@@ -64,7 +60,7 @@ struct SessionReplayView: View {
                     }
                 }
             }
-            .aspectRatio(videoAspect, contentMode: .fit)
+            .aspectRatio(viewModel.videoAspect, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Controls bar

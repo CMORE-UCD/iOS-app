@@ -15,6 +15,7 @@ class SessionReplayViewModel: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var currentTime: Double = 0.0
     @Published var duration: Double = 0.0
+    @Published var videoAspect: CGFloat = 16.0 / 9.0
 
     // MARK: - Player
 
@@ -39,8 +40,12 @@ class SessionReplayViewModel: ObservableObject {
         }
 
         Task {
-            if let duration = try? await player.currentItem?.asset.load(.duration) {
-                self.duration = duration.seconds
+            guard let asset = player.currentItem?.asset else { return }
+            async let durationValue = try? asset.load(.duration)
+            async let tracks = try? asset.loadTracks(withMediaType: .video)
+            if let d = await durationValue { self.duration = d.seconds }
+            if let size = try? await tracks?.first?.load(.naturalSize), size.width > 0 {
+                self.videoAspect = abs(size.width / size.height)
             }
         }
 
