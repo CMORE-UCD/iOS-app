@@ -13,7 +13,7 @@ class VideoProcessingViewModel: ObservableObject {
 
     @Published var overlay: FrameResult?
     @Published var currentFrame: UIImage?
-    @Published var handedness: HumanHandPoseObservation.Chirality = .right
+    @Published var handedness: HumanHandPoseObservation.Chirality?
     @Published var isProcessing = false
     @Published var isDone = false
 
@@ -129,6 +129,7 @@ class VideoProcessingViewModel: ObservableObject {
         }
 
         phase = .counting
+        guard let handedness = handedness else { fatalError("Video Processing View Model: Handedness no specified") }
         await frameProcessor.startCountingBlocks(for: handedness, box: box)
 
         // Yield the first counting frame

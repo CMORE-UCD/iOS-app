@@ -32,7 +32,7 @@ struct VideoProcessingView: View {
 
                 GeometryReader { geo in
                     if let overlay = viewModel.overlay {
-                        OverlayView(overlay, geo, viewModel.handedness)
+                        OverlayView(overlay, geo, handedness)
                     }
                 }
             }
@@ -41,7 +41,7 @@ struct VideoProcessingView: View {
 
             // UI overlay
             VStack {
-                HandednessIndicator(handedness: viewModel.handedness)
+                HandednessIndicator(handedness: handedness)
                     .padding(.top, 5)
                 // Block count
                 if let blocks = viewModel.overlay?.blockTransfered {
