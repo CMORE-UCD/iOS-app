@@ -72,7 +72,7 @@ actor FrameProcessor {
             }
         }
         
-        return left > right ? .left : .right
+        return left > right ? .right : .left
     }
 
     /// Start consuming the camera frame stream. A single for-await loop runs for the
@@ -205,10 +205,10 @@ actor FrameProcessor {
     // MARK: - Private functions
     
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
-        guard var counter = counter else { fatalError("Frame Processor: counter is nil") }
-        let previousState = counter.state
+        guard counter != nil else { fatalError("Frame Processor: counter is nil") }
+        let previousState = counter!.state
 
-        let result: FrameResult = counter.update(with: partialResult)
+        let result: FrameResult = counter!.update(with: partialResult)
 
         if previousState != .crossed, result.state == .crossed {
             onCrossed()

@@ -189,6 +189,7 @@ class VideoProcessingViewModel: ObservableObject {
         let suffix = Date().timeIntervalSince1970
         let resultsFileName = "CMORE_Results_\(suffix).json"
         let resultsURL = documentsDir.appendingPathComponent(resultsFileName)
+        dprint("Saved \(results.count) results to \(resultsURL.path)")
 
         // Copy video to documents directory
         let videoFileName = "CMORE_Import_\(suffix).mov"
