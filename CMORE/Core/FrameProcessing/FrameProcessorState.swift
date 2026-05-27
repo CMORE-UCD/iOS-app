@@ -10,176 +10,74 @@ import simd
 /// The hand-crossing state machine for block counting.
 ///
 /// State flow:
-///   free -> detecting -> crossed -> crossedBack?-> released -> free
+///   inital -> crossed -> notCrossed -> crossed -> notCrossed -> ...
+/// Each transition INTO `.crossed` is treated as one block crossing by
+/// `FrameProcessor.processInOrder`.
 enum BlockCountingState: String, Codable {
-    case free
-    case detecting
+    case inital
     case crossed
-    case crossedBack
-    case released
+    case notCrossed
 
-    /// Compute the next state given the current hand observations, box geometry,
-    /// and recent block detections.
+    /// Compute the next state given the current hand observations and box geometry.
     func transition(by hands: [HumanHandPoseObservation], _ box: BoxDetection, _ blockDetections: [BlockObservation], in resolution: CGSize = CameraSettings.resolution) -> BlockCountingState {
-        guard let hand = hands.first else {
+        let lineY = box.frontTopLineY(in: resolution)
+        
+        guard let hand = hands.first(where: { isValidHand(hand: $0, above: lineY) }) else {
             return self
         }
 
-        let divider = (
-            box["Front divider top"],
-            box["Front top middle"],
-            box["Back divider top"]
-        )
-        let backHorizon = max(
-            box["Back top left"].position.y,
-            box["Back top right"].position.y
-        )
+        // Box keypoints are stored normalized; denormalize once here so the
+        // helpers below can stay in pixel space alongside the hand-joint math.
+        let dividerX = box.dividerX(in: resolution)
         let chirality = hand.chirality!
         let tips = hand.fingerTips
-
-        /// Block centers in frame coordinates (lazily computed).
-        var blockCenters: [SIMD2<Double>] {
-            blockDetections.map { block in
-                let center = block.boundingBox.toImageCoordinates(resolution)
-                return SIMD2<Double>(x: center.midX, y: center.midY)
-            }
-        }
+        let crossing = isCrossed(dividerX: dividerX, tips, handedness: chirality)
 
         switch self {
-        case .free:
-            if isAbove(of: box["Front divider top"].position.y, tips) &&
-                !isCrossed(divider: divider, tips, handedness: chirality) {
-                return .detecting
-            }
-
-        case .released:
-            if !isAbove(of: backHorizon, tips) &&
-                !isCrossed(divider: divider, tips, handedness: chirality) {
-                return .free
-            }
-
-        case .crossedBack:
-            if isBlockApart(from: hand, distanceThreshold: FrameProcessingThresholds.releasedDistanceMultiplier * blockLengthInPixels(scale: box.cmPerPixel), blockCenters) {
-                return .released
-            }
-            if !isAbove(of: backHorizon, tips) {
-                return .free
-            }
-            if isCrossed(divider: divider, tips, handedness: chirality) {
-                return .crossed
-            }
-
-        case .detecting:
-            if !isAbove(of: backHorizon, tips) &&
-                !isCrossed(divider: divider, tips, handedness: chirality) {
-                return .free
-            }
-            if isCrossed(divider: divider, tips, handedness: chirality) {
-                return .crossed
-            }
-
+        case .inital, .notCrossed:
+            return crossing ? .crossed : self
         case .crossed:
-            if isBlockApart(from: hand, distanceThreshold: FrameProcessingThresholds.releasedDistanceMultiplier * blockLengthInPixels(scale: box.cmPerPixel), blockCenters) {
-                return .released
-            }
-            if !isCrossed(divider: divider, tips, handedness: chirality) {
-                return .crossedBack
-            }
+            return crossing ? .crossed : .notCrossed
         }
-        return self
+    }
+}
+
+/// A hand is "valid" if all of its joints sit above the given line — typically
+/// the box's front-top edge (via `BoxDetection.frontTopLineY(in:)`). Anything
+/// below it is treated as not being inside the counting region.
+func isValidHand(hand: HumanHandPoseObservation, above lineY: (Float) -> Float, in resolution: CGSize = CameraSettings.resolution) -> Bool {
+    let joints = Array(hand.allJoints().values)
+    return isAbove(lineY: lineY, joints, in: resolution)
+}
+
+/// Returns true if every joint lies above the line (Vision Y-up: above = larger y).
+/// - Parameters:
+///   - lineY: Closure mapping a joint x (pixel) to the line's y (pixel) at that x.
+///   - joints: Hand joints to test.
+func isAbove(lineY: (Float) -> Float, _ joints: [Joint], in resolution: CGSize = CameraSettings.resolution) -> Bool {
+    return joints.allSatisfy { joint in
+        let x = Float(joint.location.x * resolution.width)
+        let y = Float(joint.location.y * resolution.height)
+        return y > lineY(x)
     }
 }
 
 /// Returns true if any fingertip crosses the divider polyline.
 /// - Parameters:
-///   - divider: Tuple of three points (front/top, front/middle, back/top) as [x, y] in image space.
-///   - keypoints: Hand joints to test.
-func isCrossed(divider: (Keypoint, Keypoint, Keypoint), _ joints: [Joint], handedness: HumanHandPoseObservation.Chirality, in resolution: CGSize = CameraSettings.resolution) -> Bool {
-    let (frontTop, frontMiddle, backTop) = divider
-
-    // Compute the divider's x-position for a given y by clamping to the end points
-    // and linearly interpolating between them.
-    func dividerX(at y: Float) -> Float {
-        let start: SIMD2<Float>
-        let end: SIMD2<Float>
-        
-        if y <= frontTop.position.y {
-            // Case A: Top Section
-            start = frontTop.position
-            end = frontMiddle.position
-        }
-        else if y >= backTop.position.y {
-            // Case B: Bottom Section (Parallel Projection)
-            // Vector Math: Calculate direction (B - A) and add to C
-            // No manual loops needed; SIMD handles the subtraction/addition.
-            let direction = frontMiddle.position - frontTop.position
-            
-            start = backTop.position
-            end = backTop.position + direction
-        }
-        else {
-            // Case C: Middle Section
-            start = frontTop.position
-            end = backTop.position
-        }
-        
-        // 2. Solve for X
-        // Calculate vertical progress 't' (0.0 to 1.0)
-        let dy = end.y - start.y
-        
-        // Safety: Avoid division by zero
-        guard abs(dy) > .leastNormalMagnitude else { return start.x }
-        
-        let t = (y - start.y) / dy
-        
-        // 3. Built-in Interpolation
-        // simd_mix(a, b, t) is the hardware-optimized version of "a + (b - a) * t"
-        return simd_mix(start.x, end.x, t)
-    }
-
+///   - dividerX: Closure mapping a y (pixel) to the divider's x (pixel); produced by
+///               `BoxDetection.dividerX(in:)`.
+///   - joints: Hand joints to test.
+func isCrossed(dividerX: (Float) -> Float, _ joints: [Joint], handedness: HumanHandPoseObservation.Chirality, in resolution: CGSize = CameraSettings.resolution) -> Bool {
     return joints.contains { joint in
         let x = Float(joint.location.x * resolution.width)
         let y = Float(joint.location.y * resolution.height)
         switch handedness {
             case .left:
-                return x < dividerX(at: y)
+                return x < dividerX(y)
             case .right:
-                return x > dividerX(at: y)
+                return x > dividerX(y)
             @unknown default:
                 fatalError("Unknown handedness")
         }
     }
-}
-
-/// Returns true if any joints if above the horizon. Assume y increase upwards
-func isAbove(of horizon: Float, _ keypoints: [Joint], in resolution: CGSize = CameraSettings.resolution) -> Bool {
-    for joint in keypoints {
-        if Float(joint.location.y * resolution.height) > horizon {
-            return true
-        }
-    }
-    return false
-}
-
-func isBlockApart(from hand: HumanHandPoseObservation, distanceThreshold: Double, _ blockCenters: [SIMD2<Double>], in resolution: CGSize = CameraSettings.resolution) -> Bool {
-    
-    guard !blockCenters.isEmpty else { return false }
-    
-    let fingerTips = hand.fingerTips.map { joint in
-        SIMD2<Double>(
-            x: joint.location.x * resolution.width,
-            y: joint.location.y * resolution.height
-        )
-    }
-
-    let thresholdSquared = distanceThreshold * distanceThreshold
-
-    
-    for blockCenter in blockCenters {
-        // Returns .released ONLY if EVERY fingertip is further than the threshold
-        if fingerTips.allSatisfy({ simd_distance_squared($0, blockCenter) > thresholdSquared }) {
-            return true
-        }
-    }
-    return false
 }

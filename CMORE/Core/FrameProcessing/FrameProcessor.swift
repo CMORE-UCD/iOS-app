@@ -43,7 +43,7 @@ actor FrameProcessor {
 
     private var blockSize: Double {
         guard let box = counter?.box else { fatalError("No box exist!") }
-        return blockLengthInPixels(scale: box.cmPerPixel)
+        return blockLengthInPixels(scale: box.cmPerPixel(in: CameraSettings.resolution))
     }
 
     // MARK: - Public Methods
@@ -59,7 +59,7 @@ actor FrameProcessor {
     }
     
     nonisolated static func decideHandedness(by box: BoxDetection, and blocks: [BlockObservation], imageSize: CGSize = CameraSettings.resolution) -> HumanHandPoseObservation.Chirality {
-        let dividerX: (Float) -> Float = box.dividerX
+        let dividerX: (Float) -> Float = box.dividerX(in: imageSize)
         var left = 0, right = 0
         
         for block in blocks {
@@ -147,7 +147,7 @@ actor FrameProcessor {
         countingBlocks = true
         counter = Counter(
             handedness: handedness,
-            state: .free,
+            state: .inital,
             blockCounts: 0,
             box: box,
             results: []
@@ -210,7 +210,7 @@ actor FrameProcessor {
 
         let result: FrameResult = counter!.update(with: partialResult)
 
-        if previousState != .crossed, result.state == .crossed {
+        if previousState != .crossed && result.state == .crossed {
             onCrossed()
         }
 

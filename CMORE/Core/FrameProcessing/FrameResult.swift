@@ -11,7 +11,7 @@ struct FrameResult: Codable, Comparable, Sendable {
     @SecondsCoded var presentationTime: CMTime
     
     /// The state after the processing
-    var state: BlockCountingState = .free
+    var state: BlockCountingState = .inital
     var blockTransfered: Int?
     var faces: [FaceObservation]?
     var boxDetection: BoxDetection?
