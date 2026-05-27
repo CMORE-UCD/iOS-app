@@ -57,6 +57,23 @@ actor FrameProcessor {
         self.partialResult = partialResult
         self.fullResult = fullResult
     }
+    
+    nonisolated static func decideHandedness(by box: BoxDetection, and blocks: [BlockObservation], imageSize: CGSize = CameraSettings.resolution) -> HumanHandPoseObservation.Chirality {
+        let dividerX: (Float) -> Float = box.dividerX
+        var left = 0, right = 0
+        
+        for block in blocks {
+            let blockCenterX = block.boundingBox.toImageCoordinates(imageSize)
+            
+            if Float(blockCenterX.midX) < dividerX(Float(blockCenterX.midY)) {
+                left += 1
+            } else if Float(blockCenterX.midX) < dividerX(Float(blockCenterX.midY)) {
+                right += 1
+            }
+        }
+        
+        return left > right ? .left : .right
+    }
 
     /// Start consuming the camera frame stream. A single for-await loop runs for the
     /// stream's entire lifetime, dispatching frames based on the current mode.
@@ -103,12 +120,13 @@ actor FrameProcessor {
                     } else {
                         // Pre-counting: box detection for overlay
                         group.addTask {
-                            let result = FrameResult(
+                            async let result = FrameResult(
                                 presentationTime: timestamp,
-                                boxDetection: await boxDetector.detect(on: image)
+                                boxDetection: boxDetector.detect(on: image),
+                                blockDetections: blockDetector.detect(on: image)
                             )
-                            self.partialResult(result)
-                            self.fullResult(result, image)
+                            self.partialResult(await result)
+                            self.fullResult(await result, image)
                         }
                     }
                     activeTasks += 1

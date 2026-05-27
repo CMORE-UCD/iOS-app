@@ -12,7 +12,6 @@ struct VideoProcessingView: View {
     @Environment(\.dismiss) private var dismiss
 
     let videoURL: URL
-    let handedness: HumanHandPoseObservation.Chirality
 
     @State private var videoAspect: CGFloat = 16.0 / 9.0
 
@@ -32,7 +31,7 @@ struct VideoProcessingView: View {
 
                 GeometryReader { geo in
                     if let overlay = viewModel.overlay {
-                        OverlayView(overlay, geo, handedness)
+                        OverlayView(overlay, geo, viewModel.handedness)
                     }
                 }
             }
@@ -41,8 +40,10 @@ struct VideoProcessingView: View {
 
             // UI overlay
             VStack {
-                HandednessIndicator(handedness: handedness)
-                    .padding(.top, 5)
+                if let handedness = viewModel.handedness {
+                    HandednessIndicator(handedness: handedness)
+                        .padding(.top, 5)
+                }
                 // Block count
                 if let blocks = viewModel.overlay?.blockTransfered {
                     Text("Blocks: \(blocks)")
@@ -75,7 +76,6 @@ struct VideoProcessingView: View {
             Task { @MainActor in
                 OrientationManager.shared.setOrientation(.landscapeRight)
             }
-            viewModel.handedness = handedness
             viewModel.loadVideo(url: videoURL)
         }
         .onDisappear {

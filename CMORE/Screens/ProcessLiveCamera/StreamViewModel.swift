@@ -169,18 +169,13 @@ class StreamViewModel: ObservableObject {
         // Compute block count from results
         let blockCount = result.compactMap(\.blockTransfered).max() ?? 0
 
-        // Create and persist the session
-        let session = Session(
-            id: UUID(),
-            date: Date(),
-            blockCount: blockCount,
-            videoFileName: videoURL.lastPathComponent,
-            resultsFileName: resultsFileName
-        )
-        
         Task {
             do {
-                try await SessionStore.shared.add(session)
+                try await SessionStore.shared.add(
+                    blockCount: blockCount,
+                    videoFileName: videoURL.lastPathComponent,
+                    resultsFileName: resultsFileName
+                )
             } catch {
                 dprint("StreamViewModel: failed to save the recorded session!")
             }

@@ -13,9 +13,9 @@ class VideoProcessingViewModel: ObservableObject {
 
     @Published var overlay: FrameResult?
     @Published var currentFrame: UIImage?
-    @Published var handedness: HumanHandPoseObservation.Chirality?
     @Published var isProcessing = false
     @Published var isDone = false
+    @Published private(set) var handedness: HumanHandPoseObservation.Chirality?
 
     // MARK: - Private Properties
 
@@ -99,8 +99,12 @@ class VideoProcessingViewModel: ObservableObject {
     private func onFrameProcessed(_ result: FrameResult) {
         switch phase {
         case .scanning:
-            if let box = result.boxDetection {
-                // Box found! Rewind and switch to counting
+            if let box = result.boxDetection, !result.blockDetections.isEmpty {
+                // Box found! Decide handedness
+                if handedness == nil {
+                    handedness = FrameProcessor.decideHandedness(by: box, and: result.blockDetections)
+                }
+                // Rewind and switch to counting
                 guard transitionTask == nil else { return }
                 transitionTask =  Task { [weak self] in
                     await self?.transitionToCounting(box: box)
@@ -209,17 +213,13 @@ class VideoProcessingViewModel: ObservableObject {
 
         let blockCount = results.last?.blockTransfered ?? 0
 
-        let session = Session(
-            id: UUID(),
-            date: Date(),
-            blockCount: blockCount,
-            videoFileName: videoFileName,
-            resultsFileName: resultsFileName
-        )
-        
         Task {
             do {
-                try await SessionStore.shared.add(session)
+                try await SessionStore.shared.add(
+                    blockCount: blockCount,
+                    videoFileName: videoFileName,
+                    resultsFileName: resultsFileName
+                )
             } catch{
                 dprint("Video Processing View Model: fail to save the session")
             }

@@ -27,7 +27,20 @@ actor SessionStore {
 
     // MARK: - CRUD
 
-    func add(_ session: Session) throws {
+    func add(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        blockCount: Int,
+        videoFileName: String,
+        resultsFileName: String
+    ) throws {
+        let session = Session(
+            id: id,
+            date: date,
+            blockCount: blockCount,
+            videoFileName: videoFileName,
+            resultsFileName: resultsFileName
+        )
         context.insert(session)
         do {
             try context.save()
