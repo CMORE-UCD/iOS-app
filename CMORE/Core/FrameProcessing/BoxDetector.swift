@@ -183,6 +183,50 @@ nonisolated struct BoxDetection: Codable, Sendable {
         return dividerHeight / Double(keypointHeight)
     }
     
+    var dividerX: (Float) -> Float {
+        let frontTopDivider = self["Front divider top"]
+        let bottomDivider = self["Front top middle"]
+        let backTopDivider = self["Back divider top"]
+        
+        return { y in
+            let start: SIMD2<Float>
+            let end: SIMD2<Float>
+            
+            if y <= frontTopDivider.position.y {
+                // Case A: Bottom Section
+                start = frontTopDivider.position
+                end = bottomDivider.position
+            }
+            else if y >= backTopDivider.position.y {
+                // Case B: Top Section (Parallel Projection)
+                // Vector Math: Calculate direction (B - A) and add to C
+                // No manual loops needed; SIMD handles the subtraction/addition.
+                let direction = bottomDivider.position - frontTopDivider.position
+                
+                start = backTopDivider.position
+                end = backTopDivider.position + direction
+            }
+            else {
+                // Case C: Middle Section
+                start = frontTopDivider.position
+                end = backTopDivider.position
+            }
+            
+            // 2. Solve for X
+            // Calculate vertical progress 't' (0.0 to 1.0)
+            let dy = end.y - start.y
+            
+            // Safety: Avoid division by zero
+            guard abs(dy) > .leastNormalMagnitude else { return start.x }
+            
+            let t = (y - start.y) / dy
+            
+            // 3. Built-in Interpolation
+            // simd_mix(a, b, t) is the hardware-optimized version of "a + (b - a) * t"
+            return simd_mix(start.x, end.x, t)
+        }
+    }
+    
     // Control which properties get saved
     enum CodingKeys: String, CodingKey {
         case centerX
