@@ -11,17 +11,19 @@ import Vision
 struct BoundingBoxView: View {
     let geo: GeometryProxy
     let normalizedBox: NormalizedRect
-    
-    init(_ geo: GeometryProxy, _ bbox: BoundingBoxProviding) {
+    let color: Color
+
+    init(_ geo: GeometryProxy, _ bbox: BoundingBoxProviding, color: Color = .red) {
         self.geo = geo
         self.normalizedBox = bbox.boundingBox
+        self.color = color
     }
 
     var body: some View {
         let rect: CGRect = normalizedBox.toImageCoordinates(geo.size, origin: .upperLeft)
         
         return Rectangle()
-            .stroke(Color.red, lineWidth: 2)
+            .stroke(color, lineWidth: 2)
             .frame(
                 width: rect.width,
                 height: rect.height

@@ -228,8 +228,16 @@ actor FrameProcessor {
         let requests = Array(blockTrackers.keys)
         var trackedBlocks: [UUID: NormalizedRect] = [:]
         let handler = ImageRequestHandler(frame)
+        #if DEBUG
+        print("Frame processor: \(requests.count) tracking requests")
+        var observationCount: Int = 0
+        #endif
         for await observation in handler.performAll(requests) {
             if case .trackObject(let request, let trackedBlock) = observation {
+                
+                #if DEBUG
+                observationCount += 1
+                #endif
                 
                 guard let trackedBlock = trackedBlock else {
                     // lost track of the block, remove the tracker
@@ -242,6 +250,10 @@ actor FrameProcessor {
                 }
             }
         }
+        
+        #if DEBUG
+        print("Frame processor: \(observationCount) observations")
+        #endif
         
         var updatedResult = partialResult
         let (trackedNotDetected, unmatchedIndices) = assignUUIDsToDetections(

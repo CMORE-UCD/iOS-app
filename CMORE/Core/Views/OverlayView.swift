@@ -40,7 +40,7 @@ struct OverlayView: View {
         
         if !overlay.blockDetections.isEmpty {
             ForEach(overlay.blockDetections.indices, id: \.self) { i in
-                BoundingBoxView(geometry, overlay.blockDetections[i])
+                BoundingBoxView(geometry, overlay.blockDetections[i], color: overlay.blockDetections[i].id != nil ? .yellow : .red)
             }
         }
     }

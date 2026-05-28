@@ -11,7 +11,7 @@ nonisolated enum FrameProcessingThresholds {
     static let blockDetectionConfidenceThreshold: Float = 0.4
     
     /// Minimum confidence to keep a block from tracker
-    static let blockTrackedConfidenceThreshold: Float = 0.3
+    static let blockTrackedConfidenceThreshold: Float = 0.5
 
     /// Minimum iou to match
     static let iouThreshold: CGFloat = 0.5
