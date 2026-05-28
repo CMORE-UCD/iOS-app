@@ -239,15 +239,14 @@ actor FrameProcessor {
                 observationCount += 1
                 #endif
                 
-                guard let trackedBlock = trackedBlock else {
+                guard let trackedBlock = trackedBlock,
+                        trackedBlock.confidence <= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
                     // lost track of the block, remove the tracker
                     blockTrackers.removeValue(forKey: request)
                     continue
                 }
                 
-                if trackedBlock.confidence > FrameProcessingThresholds.blockTrackedConfidenceThreshold {
-                    trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
-                }
+                trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
             }
         }
         
