@@ -261,8 +261,20 @@ actor FrameProcessor {
             trackedBlocks: trackedBlocks
         )
         
-        // 3. Create new trackers for unmatched
+        // 3. Create new trackers for unmatched — but suppress any whose box
+        // already sits near a live tracker, to avoid double-spawning on near-misses.
+        let trackerBoxes = Array(trackedBlocks.values)
         for idx in unmatchedIndices {
+            let candidateBox = partialResult.blockDetections[idx].boundingBox
+                .toImageCoordinates(CameraSettings.resolution)
+            let nearExistingTracker = trackerBoxes.contains { tracked in
+                calculateIoU(
+                    rect1: candidateBox,
+                    rect2: tracked.toImageCoordinates(CameraSettings.resolution)
+                ) >= FrameProcessingThresholds.trackerVicinityIoUThreshold
+            }
+            guard !nearExistingTracker else { continue }
+
             let uuid = UUID()
             blockTrackers[
                 TrackObjectRequest(
