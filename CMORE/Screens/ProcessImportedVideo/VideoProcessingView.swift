@@ -5,17 +5,15 @@
 
 import SwiftUI
 import Vision
+import AVFoundation
 
 struct VideoProcessingView: View {
     @StateObject private var viewModel = VideoProcessingViewModel()
     @Environment(\.dismiss) private var dismiss
 
     let videoURL: URL
-    let handedness: HumanHandPoseObservation.Chirality
 
-    private var streamAspect: CGFloat {
-        CameraSettings.resolution.width / CameraSettings.resolution.height
-    }
+    @State private var videoAspect: CGFloat = 16.0 / 9.0
 
     var body: some View {
         ZStack {
@@ -37,13 +35,15 @@ struct VideoProcessingView: View {
                     }
                 }
             }
-            .aspectRatio(streamAspect, contentMode: .fit)
+            .aspectRatio(videoAspect, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // UI overlay
             VStack {
-                HandednessIndicator(handedness: viewModel.handedness)
-                    .padding(.top, 5)
+                if let handedness = viewModel.handedness {
+                    HandednessIndicator(handedness: handedness)
+                        .padding(.top, 5)
+                }
                 // Block count
                 if let blocks = viewModel.overlay?.blockTransfered {
                     Text("Blocks: \(blocks)")
@@ -76,7 +76,6 @@ struct VideoProcessingView: View {
             Task { @MainActor in
                 OrientationManager.shared.setOrientation(.landscapeRight)
             }
-            viewModel.handedness = handedness
             viewModel.loadVideo(url: videoURL)
         }
         .onDisappear {
@@ -85,6 +84,11 @@ struct VideoProcessingView: View {
             }
         }
         .task {
+            let asset = AVURLAsset(url: videoURL)
+            if let track = try? await asset.loadTracks(withMediaType: .video).first,
+               let size = try? await track.load(.naturalSize), size.width > 0 {
+                videoAspect = abs(size.width / size.height)
+            }
             await viewModel.startProcessing()
         }
         .onChange(of: viewModel.isDone) { _, isDone in

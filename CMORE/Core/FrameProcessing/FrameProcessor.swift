@@ -43,7 +43,7 @@ actor FrameProcessor {
 
     private var blockSize: Double {
         guard let box = counter?.box else { fatalError("No box exist!") }
-        return blockLengthInPixels(scale: box.cmPerPixel)
+        return blockLengthInPixels(scale: box.cmPerPixel(in: CameraSettings.resolution))
     }
 
     // MARK: - Public Methods
@@ -56,6 +56,23 @@ actor FrameProcessor {
         self.onCrossed = onCross
         self.partialResult = partialResult
         self.fullResult = fullResult
+    }
+    
+    nonisolated static func decideHandedness(by box: BoxDetection, and blocks: [BlockObservation], imageSize: CGSize = CameraSettings.resolution) -> HumanHandPoseObservation.Chirality {
+        let dividerX: (Float) -> Float = box.dividerX(in: imageSize)
+        var left = 0, right = 0
+        
+        for block in blocks {
+            let blockCenterX = block.boundingBox.toImageCoordinates(imageSize)
+            
+            if Float(blockCenterX.midX) < dividerX(Float(blockCenterX.midY)) {
+                left += 1
+            } else if Float(blockCenterX.midX) < dividerX(Float(blockCenterX.midY)) {
+                right += 1
+            }
+        }
+        
+        return left > right ? .right : .left
     }
 
     /// Start consuming the camera frame stream. A single for-await loop runs for the
@@ -103,12 +120,13 @@ actor FrameProcessor {
                     } else {
                         // Pre-counting: box detection for overlay
                         group.addTask {
-                            let result = FrameResult(
+                            async let result = FrameResult(
                                 presentationTime: timestamp,
-                                boxDetection: await boxDetector.detect(on: image)
+                                boxDetection: boxDetector.detect(on: image),
+                                blockDetections: blockDetector.detect(on: image)
                             )
-                            self.partialResult(result)
-                            self.fullResult(result, image)
+                            self.partialResult(await result)
+                            self.fullResult(await result, image)
                         }
                     }
                     activeTasks += 1
@@ -129,7 +147,7 @@ actor FrameProcessor {
         countingBlocks = true
         counter = Counter(
             handedness: handedness,
-            state: .free,
+            state: .inital,
             blockCounts: 0,
             box: box,
             results: []
@@ -187,12 +205,12 @@ actor FrameProcessor {
     // MARK: - Private functions
     
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
-        guard var counter = counter else { fatalError("Frame Processor: counter is nil") }
-        let previousState = counter.state
+        guard counter != nil else { fatalError("Frame Processor: counter is nil") }
+        let previousState = counter!.state
 
-        let result: FrameResult = counter.update(with: partialResult)
+        let result: FrameResult = counter!.update(with: partialResult)
 
-        if previousState != .crossed, result.state == .crossed {
+        if previousState != .crossed && result.state == .crossed {
             onCrossed()
         }
 

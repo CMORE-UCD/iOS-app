@@ -13,6 +13,3 @@ cd CMORE-app/
 git lfs pull
 open CMORE.xcodeproj
 ```
-
-# Potential Bug
-Only works with `1080x1920` since `camerasettings.resolution` is used everywhere...

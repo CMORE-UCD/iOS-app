@@ -16,8 +16,6 @@ struct LibraryView: View {
     @State private var navigateToCamera = false
     @State private var selectedVideoURL: URL?
     @State private var navigateToVideo = false
-    @State private var showHandednessChoice = false
-    @State private var selectedHandedness: HumanHandPoseObservation.Chirality = .right
     @State private var showValidationError = false
     @State private var validationErrorMessage = ""
     @State private var shareItems: [URL] = []
@@ -101,19 +99,8 @@ struct LibraryView: View {
             }
             .navigationDestination(isPresented: $navigateToVideo) {
                 if let url = selectedVideoURL {
-                    VideoProcessingView(videoURL: url, handedness: selectedHandedness)
+                    VideoProcessingView(videoURL: url)
                 }
-            }
-            .alert("Which hand?", isPresented: $showHandednessChoice) {
-                Button("Right Hand") {
-                    selectedHandedness = .right
-                    navigateToVideo = true
-                }
-                Button("Left Hand") {
-                    selectedHandedness = .left
-                    navigateToVideo = true
-                }
-                Button("Cancel", role: .cancel) {}
             }
             .sheet(isPresented: $showPhotoPicker) {
                 VideoPicker(completion: { url in
@@ -149,7 +136,7 @@ struct LibraryView: View {
             } else {
                 await MainActor.run {
                     selectedVideoURL = url
-                    showHandednessChoice = true
+                    navigateToVideo = true
                 }
             }
         }

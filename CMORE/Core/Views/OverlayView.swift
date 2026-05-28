@@ -79,16 +79,7 @@ struct BoxView: View {
     init(_ geo: GeometryProxy, _ box: BoxDetection) {
         self.geo = geo
         self.box = box
-        
-        var normalizedPoints = [NormalizedPoint]()
-        for keypoint in box.keypoints {
-            let normalizedPoint = NormalizedPoint(
-                imagePoint: CGPoint(x: CGFloat(keypoint.position.x), y: CGFloat(keypoint.position.y)),
-                in: CameraSettings.resolution
-            )
-            normalizedPoints.append(normalizedPoint)
-        }
-        self.normalizedKeypoints = normalizedPoints
+        self.normalizedKeypoints = box.keypoints.map { $0.location }
     }
     
     var body: some View {
