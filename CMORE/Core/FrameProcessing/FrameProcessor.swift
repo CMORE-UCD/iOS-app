@@ -29,6 +29,7 @@ actor FrameProcessor {
 
     private var countingBlocks = false
     private var counter: Counter?
+    private var blockTrackers: [TrackObjectRequest: UUID] = [:]
 
     /// Single persistent stream consumer — never cancelled/restarted
     private var mainTask: Task<Void, Never>?
@@ -145,6 +146,7 @@ actor FrameProcessor {
 
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
         countingBlocks = true
+        blockTrackers = [:]
         counter = Counter(
             handedness: handedness,
             state: .inital,
@@ -198,17 +200,72 @@ actor FrameProcessor {
         // Reset state — mainTask automatically resumes pre-counting mode
         countingBlocks = false
         counter = nil
+        blockTrackers = [:]
 
         return resultsToReturn
     }
 
     // MARK: - Private functions
-    
-    private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
-        guard counter != nil else { fatalError("Frame Processor: counter is nil") }
-        let previousState = counter!.state
 
-        let result: FrameResult = counter!.update(with: partialResult)
+    private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
+        guard let counter else { fatalError("Frame Processor: counter is nil") }
+        let previousState = counter.state
+
+        // 1. Filter to target-side blocks.
+        //    handedness == .left  -> target side is x < dividerX
+        //    handedness == .right -> target side is x > dividerX
+        let dividerX = counter.box.dividerX(in: CameraSettings.resolution)
+        let targetIdxs: [Int] = partialResult.blockDetections.indices.filter { idx in
+            let c = partialResult.blockDetections[idx].boundingBox.toImageCoordinates(CameraSettings.resolution)
+            switch counter.handedness {
+            case .left:  return Float(c.midX) < dividerX(Float(c.midY))
+            case .right: return Float(c.midX) > dividerX(Float(c.midY))
+            @unknown default: return false
+            }
+        }
+
+        // 2. Run live trackers against this frame.
+        let requests = Array(blockTrackers.keys)
+        var trackedBlocks: [UUID: NormalizedRect] = [:]
+        let handler = ImageRequestHandler(frame)
+        for await observation in handler.performAll(requests) {
+            if case .trackObject(let request, let trackedBlock) = observation {
+                
+                guard let trackedBlock = trackedBlock else {
+                    // lost track of the block, remove the tracker
+                    blockTrackers.removeValue(forKey: request)
+                    continue
+                }
+                
+                if trackedBlock.confidence > FrameProcessingThresholds.blockTrackedConfidenceThreshold {
+                    trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
+                }
+            }
+        }
+        
+        var updatedResult = partialResult
+        let (trackedNotDetected, unmatchedIndices) = assignUUIDsToDetections(
+            detectionIndices: targetIdxs,
+            in: &updatedResult.blockDetections,
+            trackedBlocks: trackedBlocks
+        )
+        
+        // 3. Create new trackers for unmatched
+        for idx in unmatchedIndices {
+            let uuid = UUID()
+            blockTrackers[
+                TrackObjectRequest(
+                    detectedObject: DetectedObjectObservation(
+                        boundingBox: partialResult.blockDetections[idx].boundingBox
+                    )
+                )
+            ] = uuid
+            updatedResult.blockDetections[idx].id = uuid
+        }
+
+        updatedResult.blockDetections.append(contentsOf: trackedNotDetected)
+
+        let result: FrameResult = self.counter!.update(with: updatedResult)
 
         if previousState != .crossed && result.state == .crossed {
             onCrossed()
@@ -216,5 +273,81 @@ actor FrameProcessor {
 
         fullResult(result, frame)
     }
-}
+    
+    nonisolated func assignUUIDsToDetections(
+        detectionIndices: [Int],
+        in detections: inout [BlockObservation],
+        trackedBlocks: [UUID: NormalizedRect]
+    ) -> (
+        trackedNotDetected: [BlockObservation],
+        unmatchedIndices: [Int],
+    ) {
+        var trackedNotDetected: [BlockObservation] = []
+        
+        var claimedIndices = Set<Int>()
 
+        // 1. OUTER LOOP: Iterate through your existing trackers
+        for (trackerID, tracked) in trackedBlocks {
+            
+            var bestMatchIndex: Int? = nil
+            var highestIoU: CGFloat = 0.0
+            
+            // 2. INNER LOOP: Find the detection that overlaps the most with this specific tracker
+            for idx in detectionIndices{
+                
+                guard !claimedIndices.contains(idx) else { continue }
+                
+                let detected = detections[idx].boundingBox
+                let iou = calculateIoU(
+                    rect1: detected.toImageCoordinates(CameraSettings.resolution),
+                    rect2: tracked.toImageCoordinates(CameraSettings.resolution)
+                )
+                
+                if iou > highestIoU {
+                    highestIoU = iou
+                    bestMatchIndex = idx
+                }
+            }
+            
+            // 3. RESOLVE THE MATCH
+            if highestIoU >= FrameProcessingThresholds.iouThreshold, let matchedIndex = bestMatchIndex {
+                
+                // 🎯 MATCH FOUND: The detector saw the tracked object
+                detections[matchedIndex].id = trackerID
+                
+                // Remove the matched detection from the pool so another tracker can't steal it
+                claimedIndices.insert(matchedIndex)
+                
+            } else {
+                
+                // UNMATCHED TRACKER: The detector missed it this frame!
+                trackedNotDetected.append(BlockObservation(
+                    boundingBox: tracked,
+                    id: trackerID
+                ))
+                
+                print("Detector missed tracker \(trackerID). Falling back to tracked rectangle.")
+            }
+        }
+
+        return (trackedNotDetected, detectionIndices.filter{ !claimedIndices.contains($0) })
+    }
+    
+    nonisolated func calculateIoU(rect1: CGRect, rect2: CGRect) -> CGFloat {
+        // 1. Find the overlapping rectangle
+        let intersection = rect1.intersection(rect2)
+        
+        // If they don't overlap at all, intersection is null
+        if intersection.isNull || intersection.isEmpty { return 0.0 }
+        
+        // 2. Calculate the areas
+        let intersectionArea = intersection.width * intersection.height
+        let area1 = rect1.width * rect1.height
+        let area2 = rect2.width * rect2.height
+        
+        // 3. IoU Formula: Intersection / (Area1 + Area2 - Intersection)
+        let unionArea = area1 + area2 - intersectionArea
+        
+        return intersectionArea / unionArea
+    }
+}
