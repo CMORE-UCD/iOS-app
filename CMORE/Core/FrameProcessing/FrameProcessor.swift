@@ -231,6 +231,7 @@ actor FrameProcessor {
         #if DEBUG
         print("Frame processor: \(requests.count) tracking requests")
         var observationCount: Int = 0
+        let trackingStart = Date()
         #endif
         for await observation in handler.performAll(requests) {
             if case .trackObject(let request, let trackedBlock) = observation {
@@ -252,6 +253,7 @@ actor FrameProcessor {
         
         #if DEBUG
         print("Frame processor: \(observationCount) observations")
+        print("Frame processor: tracker took \(Date().timeIntervalSince(trackingStart)) seconds")
         #endif
         
         var updatedResult = partialResult
