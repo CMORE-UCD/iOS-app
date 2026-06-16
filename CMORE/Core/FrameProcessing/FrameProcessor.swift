@@ -98,7 +98,7 @@ actor FrameProcessor {
                     if await self.countingBlocks {
                         let taskIndex = index
                         let detectBoxInThisFrame = timestamp - lastBoxUpdateTime > FrameProcessingThresholds.boxUpdateInterval
-                        if detectBoxInThisFrame { lastBoxUpdateTime = timestamp }
+                        if detectBoxInThisFrame { lastBoxUpdateTime = timestamp; dprint("Frame processor: Re-detecting boxes on this frame") }
                         
                         group.addTask {
                             // Parallel tasks: hand, block, and box detection
@@ -210,6 +210,17 @@ actor FrameProcessor {
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
         guard let counter else { fatalError("Frame Processor: counter is nil") }
         let previousState = counter.state
+        var updatedResult = partialResult
+        
+        defer {
+            let result: FrameResult = self.counter!.update(with: updatedResult)
+
+            if previousState != .crossed && result.state == .crossed {
+                onCrossed()
+            }
+
+            fullResult(result, frame)
+        }
 
         // 1. Filter to target-side blocks.
         //    handedness == .left  -> target side is x < dividerX
@@ -241,13 +252,23 @@ actor FrameProcessor {
                 #endif
                 
                 guard let trackedBlock = trackedBlock,
-                        trackedBlock.confidence <= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
-                    // lost track of the block, remove the tracker
+                   trackedBlock.confidence <= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
                     blockTrackers.removeValue(forKey: request)
                     continue
                 }
                 
+                // remove tracker for stalled block
+                let previousBBox = counter.results.last?.blockDetections.first(where: {
+                    $0.id == blockTrackers[request]!
+                })?.boundingBox
+                let currentBBox = trackedBlock.boundingBox
                 trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
+                if calculateIoU(
+                    rect1: previousBBox!.toImageCoordinates(CameraSettings.resolution),
+                    rect2: currentBBox.toImageCoordinates(CameraSettings.resolution)
+                ) >= FrameProcessingThresholds.stallIoUThreshold {
+                    blockTrackers.removeValue(forKey: request)
+                }
             }
         }
         
@@ -256,13 +277,32 @@ actor FrameProcessor {
         print("Frame processor: tracker took \(Date().timeIntervalSince(trackingStart)) seconds")
         #endif
         
-        var updatedResult = partialResult
-        let (trackedNotDetected, unmatchedIndices) = assignUUIDsToDetections(
+        var (trackedNotDetected, unmatchedIndices) = assignUUIDsToDetections(
             detectionIndices: targetIdxs,
             in: &updatedResult.blockDetections,
             trackedBlocks: trackedBlocks
         )
         
+        updatedResult.blockDetections.append(contentsOf: trackedNotDetected)
+        
+        let recentTrackedBlocks = counter.results.suffix(FrameProcessingThresholds.trackedBlockLookBack).reversed().reduce(into: [UUID:NormalizedRect]()) { result, frameResult in
+            for block in frameResult.blockDetections {
+                guard let id = block.id else { continue }
+                if result.contains(where: { $0.key == id }) { continue }
+                
+                result[id] = block.boundingBox
+            }
+        }
+        
+        // cheap tracker via iou
+        let (_, stillNotMatchedIndices) = assignUUIDsToDetections(
+            detectionIndices: unmatchedIndices,
+            in: &updatedResult.blockDetections,
+            trackedBlocks: recentTrackedBlocks
+        )
+        
+        unmatchedIndices = stillNotMatchedIndices
+        guard blockTrackers.count < FrameProcessingThresholds.maxNumTrackers && !unmatchedIndices.isEmpty else { return }
         // 3. Create new trackers for unmatched — but suppress any whose box
         // already sits near a live tracker, to avoid double-spawning on near-misses.
         let trackerBoxes = Array(trackedBlocks.values)
@@ -287,16 +327,6 @@ actor FrameProcessor {
             ] = uuid
             updatedResult.blockDetections[idx].id = uuid
         }
-
-        updatedResult.blockDetections.append(contentsOf: trackedNotDetected)
-
-        let result: FrameResult = self.counter!.update(with: updatedResult)
-
-        if previousState != .crossed && result.state == .crossed {
-            onCrossed()
-        }
-
-        fullResult(result, frame)
     }
     
     nonisolated func assignUUIDsToDetections(

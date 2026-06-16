@@ -28,4 +28,13 @@ nonisolated enum FrameProcessingThresholds {
 
     /// Time interval for updating box 
     static let boxUpdateInterval: CMTime = CMTime(value: 1, timescale: 1) // 1 second
+    
+    /// Maximum of tracker at once
+    static let maxNumTrackers: Int = 1
+    
+    /// Maximum iou for not consider stalled
+    static let stallIoUThreshold: CGFloat = 0.7
+    
+    /// Maximum frames look back for tracked blocks
+    static let trackedBlockLookBack: Int = 3
 }
