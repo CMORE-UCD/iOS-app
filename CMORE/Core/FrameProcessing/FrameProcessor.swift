@@ -30,6 +30,7 @@ actor FrameProcessor {
     private var countingBlocks = false
     private var counter: Counter?
     private var blockTrackers: [TrackObjectRequest: UUID] = [:]
+    private var lastTrackedPositions: [UUID: NormalizedRect] = [:]
 
     /// Single persistent stream consumer — never cancelled/restarted
     private var mainTask: Task<Void, Never>?
@@ -147,6 +148,7 @@ actor FrameProcessor {
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
         countingBlocks = true
         blockTrackers = [:]
+        lastTrackedPositions = [:]
         counter = Counter(
             handedness: handedness,
             state: .inital,
@@ -201,6 +203,7 @@ actor FrameProcessor {
         countingBlocks = false
         counter = nil
         blockTrackers = [:]
+        lastTrackedPositions = [:]
 
         return resultsToReturn
     }
@@ -253,39 +256,36 @@ actor FrameProcessor {
                 
                 guard let trackedBlock else {
                     dprint("Frame processor: tracker returned nil observation")
-                    blockTrackers.removeValue(forKey: request)
+                    if let uuid = blockTrackers.removeValue(forKey: request) { lastTrackedPositions.removeValue(forKey: uuid) }
                     continue
                 }
                 guard trackedBlock.confidence >= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
                     dprint("Frame processor: tracker dropped — confidence \(trackedBlock.confidence) < \(FrameProcessingThresholds.blockTrackedConfidenceThreshold)")
-                    blockTrackers.removeValue(forKey: request)
+                    if let uuid = blockTrackers.removeValue(forKey: request) { lastTrackedPositions.removeValue(forKey: uuid) }
                     continue
                 }
                 
                 dprint("Frame processor: tracked block confidence \(trackedBlock.confidence)")
                 
-                // remove tracker for stalled block (by iou)
-                let previousBBox = counter.results
-                    .dropLast()
-                    .last?.blockDetections
-                    .first(where: {
-                    $0.id == blockTrackers[request]!
-                })?.boundingBox
+                // remove tracker for stalled block (by iou against previous tracker output)
+                let uuid = blockTrackers[request]!
                 let currentBBox = trackedBlock.boundingBox
-                
-                guard let previousBBox = previousBBox else { continue }
-                let iou = calculateIoU(
-                    rect1: previousBBox.toImageCoordinates(CameraSettings.resolution),
-                    rect2: currentBBox.toImageCoordinates(CameraSettings.resolution)
-                )
-                dprint("Frame processor: IoU from previous frame: \(iou)")
-                if iou == 1.0 {
-                    continue // impossible iou, tracker start working on third frame.
-                } else if iou >= FrameProcessingThresholds.stallIoUThreshold { // TODO: subtle error where comparison is done with detected block instead of tracked block
-                    blockTrackers.removeValue(forKey: request)
-                    continue
+
+                if let previousBBox = lastTrackedPositions[uuid] {
+                    let iou = calculateIoU(
+                        rect1: previousBBox.toImageCoordinates(CameraSettings.resolution),
+                        rect2: currentBBox.toImageCoordinates(CameraSettings.resolution)
+                    )
+                    dprint("Frame processor: IoU from previous frame: \(iou)")
+                    if iou >= FrameProcessingThresholds.stallIoUThreshold {
+                        dprint("Frame processor: removing stalled tracker. IoU: \(iou)")
+                        blockTrackers.removeValue(forKey: request)
+                        lastTrackedPositions.removeValue(forKey: uuid)
+                        continue
+                    }
                 }
-                trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
+                trackedBlocks[uuid] = currentBBox
+                lastTrackedPositions[uuid] = currentBBox
             }
         }
         

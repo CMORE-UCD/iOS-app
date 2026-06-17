@@ -36,5 +36,5 @@ nonisolated enum FrameProcessingThresholds {
     static let stallIoUThreshold: CGFloat = 0.9
     
     /// Maximum frames look back for tracked blocks
-    static let trackedBlockLookBack: Int = 3
+    static let trackedBlockLookBack: Int = 6
 }
