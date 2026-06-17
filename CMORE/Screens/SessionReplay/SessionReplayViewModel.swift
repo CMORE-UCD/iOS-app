@@ -5,6 +5,7 @@
 
 @preconcurrency import AVFoundation
 import SwiftUI
+import Vision
 
 @MainActor
 class SessionReplayViewModel: ObservableObject {
@@ -20,6 +21,7 @@ class SessionReplayViewModel: ObservableObject {
     // MARK: - Player
 
     let player: AVPlayer
+    let handedness: HumanHandPoseObservation.Chirality
 
     // MARK: - Private
 
@@ -33,6 +35,7 @@ class SessionReplayViewModel: ObservableObject {
         let resultsURL = documentsDir.appendingPathComponent(session.resultsFileName)
 
         self.player = AVPlayer(url: videoURL)
+        self.handedness = session.handedness
 
         if let data = try? Data(contentsOf: resultsURL),
            let results = try? JSONDecoder().decode([FrameResult].self, from: data) {

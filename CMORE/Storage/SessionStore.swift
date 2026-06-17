@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftData
+import Vision
 
 /// Manages Session persistence via SwiftData.
 /// Video and results files remain stored in the Documents directory.
@@ -32,14 +33,16 @@ actor SessionStore {
         date: Date = Date(),
         blockCount: Int,
         videoFileName: String,
-        resultsFileName: String
+        resultsFileName: String,
+        handedness: HumanHandPoseObservation.Chirality
     ) throws {
         let session = Session(
             id: id,
             date: date,
             blockCount: blockCount,
             videoFileName: videoFileName,
-            resultsFileName: resultsFileName
+            resultsFileName: resultsFileName,
+            handedness: handedness
         )
         context.insert(session)
         do {

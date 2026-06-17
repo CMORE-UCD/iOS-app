@@ -174,7 +174,8 @@ class StreamViewModel: ObservableObject {
                 try await SessionStore.shared.add(
                     blockCount: blockCount,
                     videoFileName: videoURL.lastPathComponent,
-                    resultsFileName: resultsFileName
+                    resultsFileName: resultsFileName,
+                    handedness: handedness
                 )
             } catch {
                 dprint("StreamViewModel: failed to save the recorded session!")
