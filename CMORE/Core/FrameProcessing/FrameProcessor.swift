@@ -252,23 +252,37 @@ actor FrameProcessor {
                 #endif
                 
                 guard let trackedBlock = trackedBlock,
-                   trackedBlock.confidence <= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
+                   trackedBlock.confidence >= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
                     blockTrackers.removeValue(forKey: request)
                     continue
                 }
                 
-                // remove tracker for stalled block
-                let previousBBox = counter.results.last?.blockDetections.first(where: {
+                dprint("Frame processor: tracked block confidence \(trackedBlock.confidence)")
+                
+                // remove tracker for stalled block (by iou)
+                let previousBBox = counter.results
+                    .dropLast()
+                    .last?.blockDetections
+                    .first(where: {
                     $0.id == blockTrackers[request]!
                 })?.boundingBox
                 let currentBBox = trackedBlock.boundingBox
-                trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
-                if calculateIoU(
-                    rect1: previousBBox!.toImageCoordinates(CameraSettings.resolution),
+                
+                guard let previousBBox = previousBBox else { continue }
+                let iou = calculateIoU(
+                    rect1: previousBBox.toImageCoordinates(CameraSettings.resolution),
                     rect2: currentBBox.toImageCoordinates(CameraSettings.resolution)
-                ) >= FrameProcessingThresholds.stallIoUThreshold {
+                )
+                if iou == 1.0 {
+                    continue // impossible iou, tracker start working on third frame.
+                } else if iou >= FrameProcessingThresholds.stallIoUThreshold {
+                    #if DEBUG
+                    print("Frame processor: removing stalled tracker. IoU: \(iou)")
+                    #endif
                     blockTrackers.removeValue(forKey: request)
+                    continue
                 }
+                trackedBlocks[blockTrackers[request]!] = trackedBlock.boundingBox
             }
         }
         

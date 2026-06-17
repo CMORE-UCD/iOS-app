@@ -40,9 +40,15 @@ struct OverlayView: View {
         
         if !overlay.blockDetections.isEmpty {
             ForEach(overlay.blockDetections.indices, id: \.self) { i in
-                BoundingBoxView(geometry, overlay.blockDetections[i], color: overlay.blockDetections[i].id != nil ? .yellow : .red)
+                BoundingBoxView(geometry, overlay.blockDetections[i], color: blockColor(for: overlay.blockDetections[i].id))
             }
         }
+    }
+
+    private func blockColor(for id: UUID?) -> Color {
+        guard let id else { return .red }
+        let hue = Double(abs(id.hashValue) % 100) / 100.0
+        return Color(hue: hue, saturation: 0.9, brightness: 1.0)
     }
 }
 
