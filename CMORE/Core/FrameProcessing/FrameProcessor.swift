@@ -251,8 +251,13 @@ actor FrameProcessor {
                 observationCount += 1
                 #endif
                 
-                guard let trackedBlock = trackedBlock,
-                   trackedBlock.confidence >= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
+                guard let trackedBlock else {
+                    dprint("Frame processor: tracker returned nil observation")
+                    blockTrackers.removeValue(forKey: request)
+                    continue
+                }
+                guard trackedBlock.confidence >= FrameProcessingThresholds.blockTrackedConfidenceThreshold else {
+                    dprint("Frame processor: tracker dropped — confidence \(trackedBlock.confidence) < \(FrameProcessingThresholds.blockTrackedConfidenceThreshold)")
                     blockTrackers.removeValue(forKey: request)
                     continue
                 }
@@ -291,13 +296,11 @@ actor FrameProcessor {
         print("Frame processor: tracker took \(Date().timeIntervalSince(trackingStart)) seconds")
         #endif
         
-        var (trackedNotDetected, unmatchedIndices) = assignUUIDsToDetections(
+        let (trackedNotDetected, unmatchedIndices) = assignUUIDsToDetections(
             detectionIndices: targetIdxs,
             in: &updatedResult.blockDetections,
             trackedBlocks: trackedBlocks
         )
-        
-        updatedResult.blockDetections.append(contentsOf: trackedNotDetected)
         
         let recentTrackedBlocks = counter.results.suffix(FrameProcessingThresholds.trackedBlockLookBack).reversed().reduce(into: [UUID:NormalizedRect]()) { result, frameResult in
             for block in frameResult.blockDetections {
@@ -309,20 +312,26 @@ actor FrameProcessor {
         }
         
         // cheap tracker via iou
-        let (_, stillNotMatchedIndices) = assignUUIDsToDetections(
+        var (_, stillNotMatchedIndices) = assignUUIDsToDetections(
             detectionIndices: unmatchedIndices,
             in: &updatedResult.blockDetections,
             trackedBlocks: recentTrackedBlocks
         )
         
-        unmatchedIndices = stillNotMatchedIndices
-        guard blockTrackers.count < FrameProcessingThresholds.maxNumTrackers && !unmatchedIndices.isEmpty else { return }
-        // 3. Create new trackers for unmatched — but suppress any whose box
-        // already sits near a live tracker, to avoid double-spawning on near-misses.
+        updatedResult.blockDetections.append(contentsOf: trackedNotDetected)
+        
+        // 3. Create new trackers for unmatched
         let trackerBoxes = Array(trackedBlocks.values)
-        for idx in unmatchedIndices {
+        stillNotMatchedIndices.sort(by: { l, r in
+            // highest first
+            return partialResult.blockDetections[l].boundingBox.height > partialResult.blockDetections[r].boundingBox.height
+        })
+        for idx in stillNotMatchedIndices {
+            guard blockTrackers.count < FrameProcessingThresholds.maxNumTrackers else { break }
+            
             let candidateBox = partialResult.blockDetections[idx].boundingBox
                 .toImageCoordinates(CameraSettings.resolution)
+            // suppress any whose box already sits near a live tracker, to avoid double-spawning on near-misses.
             let nearExistingTracker = trackerBoxes.contains { tracked in
                 calculateIoU(
                     rect1: candidateBox,

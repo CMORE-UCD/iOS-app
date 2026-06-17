@@ -8,13 +8,13 @@ import AVFoundation
 
 nonisolated enum FrameProcessingThresholds {
     /// Minimum confidence to keep a detected block
-    static let blockDetectionConfidenceThreshold: Float = 0.4
+    static let blockDetectionConfidenceThreshold: Float = 0.5
     
     /// Minimum confidence to keep a block from tracker
-    static let blockTrackedConfidenceThreshold: Float = 0.5
+    static let blockTrackedConfidenceThreshold: Float = 0.3
 
     /// Minimum iou to match
-    static let iouThreshold: CGFloat = 0.5
+    static let iouThreshold: CGFloat = 0.4
 
     /// IoU above which an unmatched detection is considered "near" an existing tracker
     /// and therefore suppressed from spawning a duplicate tracker.
@@ -33,7 +33,7 @@ nonisolated enum FrameProcessingThresholds {
     static let maxNumTrackers: Int = 1
     
     /// Maximum iou for not consider stalled
-    static let stallIoUThreshold: CGFloat = 0.7
+    static let stallIoUThreshold: CGFloat = 0.9
     
     /// Maximum frames look back for tracked blocks
     static let trackedBlockLookBack: Int = 3
