@@ -278,12 +278,10 @@ actor FrameProcessor {
                     rect1: previousBBox.toImageCoordinates(CameraSettings.resolution),
                     rect2: currentBBox.toImageCoordinates(CameraSettings.resolution)
                 )
+                dprint("Frame processor: IoU from previous frame: \(iou)")
                 if iou == 1.0 {
                     continue // impossible iou, tracker start working on third frame.
-                } else if iou >= FrameProcessingThresholds.stallIoUThreshold {
-                    #if DEBUG
-                    print("Frame processor: removing stalled tracker. IoU: \(iou)")
-                    #endif
+                } else if iou >= FrameProcessingThresholds.stallIoUThreshold { // TODO: subtle error where comparison is done with detected block instead of tracked block
                     blockTrackers.removeValue(forKey: request)
                     continue
                 }
@@ -324,7 +322,9 @@ actor FrameProcessor {
         let trackerBoxes = Array(trackedBlocks.values)
         stillNotMatchedIndices.sort(by: { l, r in
             // highest first
-            return partialResult.blockDetections[l].boundingBox.height > partialResult.blockDetections[r].boundingBox.height
+            let leftBox = partialResult.blockDetections[l].boundingBox
+            let rightBox = partialResult.blockDetections[r].boundingBox
+            return leftBox.origin.y + leftBox.height > rightBox.origin.y + rightBox.height
         })
         for idx in stillNotMatchedIndices {
             guard blockTrackers.count < FrameProcessingThresholds.maxNumTrackers else { break }
@@ -349,6 +349,10 @@ actor FrameProcessor {
                 )
             ] = uuid
             updatedResult.blockDetections[idx].id = uuid
+            
+            #if DEBUG
+            print("Frame processor: tracking block at \(candidateBox.origin)")
+            #endif
         }
     }
     
