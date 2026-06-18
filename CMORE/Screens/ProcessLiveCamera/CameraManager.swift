@@ -25,9 +25,9 @@ nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureF
 
     /// Called when movie file recording finishes
     var onRecordingFinished: (@Sendable (URL, Error?) -> Void)!
-    
-    /// Called when AVFoundation dropped a frame
-    var onFrameDrop: (@Sendable (CMSampleBuffer) -> Void)!
+
+    /// Called with the timestamp of the first frame actually written to the video file
+    var onRecordingStarted: (@Sendable (CMTime) -> Void)?
 
 
     // MARK: - Private Properties
@@ -36,6 +36,7 @@ nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureF
     private var lastTimestamp: CMTime?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var movieOutput: AVCaptureMovieFileOutput?
+    private var hasReportedRecordingStart = false
     private let videoOutputQueue = DispatchQueue(label: "videoOutputQueue", qos: .userInitiated)
     private var frameContinuation: AsyncStream<(CIImage, CMTime)>.Continuation?
 
@@ -140,6 +141,7 @@ nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureF
             connection.videoRotationAngle = 0.0
         }
 
+        hasReportedRecordingStart = false
         movieOutput.startRecording(to: url, recordingDelegate: self)
         print("Camera manager: Recording started")
     }
@@ -198,6 +200,11 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         let currentTime = sampleBuffer.presentationTimeStamp
 
+        if movieOutput?.isRecording == true, !hasReportedRecordingStart {
+            hasReportedRecordingStart = true
+            onRecordingStarted?(currentTime)
+        }
+
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             print("Camera manager: Fail to get pixel buffer!")
             return
@@ -242,12 +249,10 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 
     func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        let currentTime = sampleBuffer.presentationTimeStamp
         #if DEBUG
+        let currentTime = sampleBuffer.presentationTimeStamp
         print("Camera manager: AVFoundation dropped \(frameNum)th frame at \(currentTime.seconds)s")
         #endif
         frameNum += 1
-        
-        self.onFrameDrop(sampleBuffer)
     }
 }

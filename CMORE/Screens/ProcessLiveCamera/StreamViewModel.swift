@@ -69,16 +69,17 @@ class StreamViewModel: ObservableObject {
             onCross: { if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1054) } },
             partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
-                    guard let self else { return }
-
-                    if self.isRecording && self.recordingStartTime == nil {
-                        self.recordingStartTime = result.presentationTime
-                    }
-
-                    self.overlay = result
+                    self?.overlay = result
                 }
             }
         )
+
+        cameraManager.onRecordingStarted = { @Sendable [weak self] firstFrameTime in
+            Task { @MainActor in
+                guard let self, self.recordingStartTime == nil else { return }
+                self.recordingStartTime = firstFrameTime
+            }
+        }
 
         cameraManager.onRecordingFinished = { @Sendable [weak self] url, error in
             Task { @MainActor in
@@ -94,17 +95,6 @@ class StreamViewModel: ObservableObject {
             }
         }
         
-        cameraManager.onFrameDrop = { @Sendable [weak self] sampleBuffer in
-            let timestamp = sampleBuffer.presentationTimeStamp
-            
-            Task { @MainActor in
-                guard let self else { return }
-                
-                if self.isRecording && self.recordingStartTime == nil {
-                    self.recordingStartTime = timestamp
-                }
-            }
-        }
     }
 
     deinit {

@@ -204,7 +204,12 @@ class VideoProcessingViewModel: ObservableObject {
         }
 
         do {
-            let data = try JSONEncoder().encode(results)
+            let firstTime = results.first?.presentationTime ?? .zero
+            let data = try JSONEncoder().encode(results.map {
+                var tmp = $0
+                tmp.presentationTime = tmp.presentationTime - firstTime
+                return tmp
+            })
             try data.write(to: resultsURL)
         } catch {
             #if DEBUG
