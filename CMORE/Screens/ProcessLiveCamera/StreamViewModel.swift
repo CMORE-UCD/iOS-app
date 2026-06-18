@@ -35,7 +35,7 @@ class StreamViewModel: ObservableObject {
     @Published var recordingTimeRemaining: Int = 60
 
     /// The main camera capture session — forwarded from CameraManager
-    var captureSession: AVCaptureSession? { cameraManager.captureSession }
+    @Published var captureSession: AVCaptureSession?
 
     // MARK: - Private Properties
 
@@ -197,6 +197,7 @@ class StreamViewModel: ObservableObject {
     /// Starts the camera feed and begins frame processing
     func startCamera() async {
         await cameraManager.start()
+        captureSession = cameraManager.captureSession
 
         if let stream = cameraManager.frameStream {
             await frameProcessor.startProcessing(stream: stream)

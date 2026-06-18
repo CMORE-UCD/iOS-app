@@ -23,32 +23,34 @@ struct StreamView: View {
 
             // MARK: - Live Preview (fits into available space; no cropping)
             Group {
-                if let session = viewModel.captureSession {
-                    // Live camera preview with overlay in a ZStack
-                    ZStack {
+                ZStack {
+                    if let session = viewModel.captureSession {
                         CameraPreviewView(session: session)
                         
-                        // Face bounding boxes overlay, constrained to the same space as camera preview
-                        GeometryReader { localGeo in
-                            if let overlay = viewModel.overlay {
-                                OverlayView(overlay, localGeo, viewModel.handedness)
-                            }
-                        }
+                    } else {
+                        Color.black
+                            .overlay(
+                                Text("Camera will appear here")
+                                    .foregroundColor(.white)
+                                    .font(.title2)
+                            )
                     }
-                    .aspectRatio(streamAspect, contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Placeholder when camera is not available yet, maintaining 16:9 fit.
-                    Color.black
-                        .aspectRatio(streamAspect, contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(
-                            Text("Camera will appear here")
-                                .foregroundColor(.white)
-                                .font(.title2)
-                        )
+                    // Overlay constrained to the same space as camera preview
+                    GeometryReader { localGeo in
+                        if let overlay = viewModel.overlay {
+                            OverlayView(overlay, localGeo, viewModel.handedness)
+                        }
+                        BoxShape()
+                            .stroke(
+                                Color.white.opacity(0.9),
+                                style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                            )
+                            .padding(.all, localGeo.size.width * 0.1)
+                    }
                 }
             }
+            .aspectRatio(streamAspect, contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             StreamUI(viewModel)
         }
