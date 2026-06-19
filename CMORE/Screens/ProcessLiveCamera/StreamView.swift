@@ -28,12 +28,9 @@ struct StreamView: View {
                         CameraPreviewView(session: session)
                         
                     } else {
-                        Color.black
-                            .overlay(
-                                Text("Camera will appear here")
-                                    .foregroundColor(.white)
-                                    .font(.title2)
-                            )
+                        Image("placeHolder")
+                            .resizable()
+                            .scaledToFill()
                     }
                     // Overlay constrained to the same space as camera preview
                     GeometryReader { localGeo in
@@ -45,7 +42,9 @@ struct StreamView: View {
                                 Color.white.opacity(0.9),
                                 style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
                             )
-                            .padding(.all, localGeo.size.width * 0.1)
+                            .padding(.all, localGeo.size.width * 0.03)
+                            .padding(.top, localGeo.size.height * 0.29)
+                            .padding(.horizontal, localGeo.size.width * 0.04)
                     }
                 }
             }
