@@ -19,7 +19,7 @@ struct BoxShape: Shape {
         
         // --- Symmetrical Coordinates ---
         // X-axis is mirrored exactly around 0.5
-        let backLeftX: CGFloat = 0.18 + 0.048
+        let backLeftX: CGFloat = 0.228
         let backRightX = 1 - backLeftX
         
         let frontTopLeftX: CGFloat = 0.07
