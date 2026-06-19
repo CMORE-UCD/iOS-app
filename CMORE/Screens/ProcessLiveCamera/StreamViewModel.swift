@@ -37,6 +37,9 @@ class StreamViewModel: ObservableObject {
     /// The main camera capture session — forwarded from CameraManager
     @Published var captureSession: AVCaptureSession?
 
+    /// Light up the UI when the box Detection is aligned with lines on the screen
+    @Published var isAligned: Bool = false
+
     // MARK: - Private Properties
 
     private let cameraManager = CameraManager()

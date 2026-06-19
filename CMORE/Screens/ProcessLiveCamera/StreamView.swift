@@ -39,12 +39,9 @@ struct StreamView: View {
                         }
                         BoxShape()
                             .stroke(
-                                Color.white.opacity(0.9),
-                                style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                                viewModel.isAligned ? Color.white.opacity(0.9) : Color.white.opacity(0.6),
+                                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
                             )
-                            .padding(.all, localGeo.size.width * 0.03)
-                            .padding(.top, localGeo.size.height * 0.29)
-                            .padding(.horizontal, localGeo.size.width * 0.04)
                     }
                 }
             }
