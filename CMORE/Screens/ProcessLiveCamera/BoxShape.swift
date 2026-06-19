@@ -17,24 +17,17 @@ struct BoxShape: Shape {
             CGPoint(x: rect.minX + nx * w, y: rect.minY + ny * h)
         }
         
-        // --- Symmetrical Coordinates ---
-        // X-axis is mirrored exactly around 0.5
-        let backLeftX: CGFloat = 0.228
-        let backRightX = 1 - backLeftX
-        
-        let frontTopLeftX: CGFloat = 0.07
-        let frontTopRightX: CGFloat = 1.0 - frontTopLeftX
-        
-        let frontBottomLeftX: CGFloat = 0.09
-        let frontBottomRightX: CGFloat = 1 - frontBottomLeftX
-        
-        let centerX: CGFloat = 0.5
-        
-        // Y-axis coordinates
-        let stickTopY: CGFloat = 0.34
-        let backRimY: CGFloat = 0.5
-        let frontRimY: CGFloat = 0.75
-        let bottomY: CGFloat = 0.95
+        let backLeftX = LiveUIConstants.backLeftX
+        let backRightX = LiveUIConstants.backRightX
+        let frontTopLeftX = LiveUIConstants.frontTopLeftX
+        let frontTopRightX = LiveUIConstants.frontTopRightX
+        let frontBottomLeftX = LiveUIConstants.frontBottomLeftX
+        let frontBottomRightX = LiveUIConstants.frontBottomRightX
+        let centerX = LiveUIConstants.centerX
+        let stickTopY = LiveUIConstants.stickTopY
+        let backRimY = LiveUIConstants.backRimY
+        let frontRimY = LiveUIConstants.frontRimY
+        let bottomY = LiveUIConstants.bottomY
         
         // Points
         let btl = p(backLeftX, backRimY)

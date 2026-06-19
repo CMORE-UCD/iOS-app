@@ -73,6 +73,7 @@ class StreamViewModel: ObservableObject {
             partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
                     self?.overlay = result
+                    self?.isAligned = self?.isBoxAligned(result.boxDetection) ?? false
                 }
             }
         )
@@ -280,5 +281,27 @@ class StreamViewModel: ObservableObject {
         }
 
         cameraManager.stopRecording()
+    }
+
+    private func isBoxAligned(_ box: BoxDetection?) -> Bool {
+        guard let box else { return false }
+
+        // BoxShapeConstants use screen-space y (0 = top).
+        // NormalizedPoint stores Vision-space y (0 = bottom), so flip with (1 - y).
+        let checks: [(String, Double, Double)] = [
+            ("Back top left",      Double(LiveUIConstants.backLeftX),         1 - Double(LiveUIConstants.backRimY)),
+            ("Back top right",     Double(LiveUIConstants.backRightX),        1 - Double(LiveUIConstants.backRimY)),
+            ("Front top left",     Double(LiveUIConstants.frontTopLeftX),     1 - Double(LiveUIConstants.frontRimY)),
+            ("Front top right",    Double(LiveUIConstants.frontTopRightX),    1 - Double(LiveUIConstants.frontRimY)),
+            ("Front bottom left",  Double(LiveUIConstants.frontBottomLeftX),  1 - Double(LiveUIConstants.bottomY)),
+            ("Front bottom right", Double(LiveUIConstants.frontBottomRightX), 1 - Double(LiveUIConstants.bottomY)),
+        ]
+
+        return checks.allSatisfy { name, gx, gy in
+            let loc = box[name].location
+            let dx = Double(loc.x) - gx
+            let dy = Double(loc.y) - gy
+            return (dx * dx + dy * dy).squareRoot() < LiveUIConstants.offTolerant
+        }
     }
 }
