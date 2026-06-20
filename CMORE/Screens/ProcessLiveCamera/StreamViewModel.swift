@@ -35,7 +35,10 @@ class StreamViewModel: ObservableObject {
     @Published var recordingTimeRemaining: Int = 60
 
     /// The main camera capture session — forwarded from CameraManager
-    var captureSession: AVCaptureSession? { cameraManager.captureSession }
+    @Published var captureSession: AVCaptureSession?
+
+    /// Light up the UI when the box Detection is aligned with lines on the screen
+    @Published var isAligned: Bool = false
 
     // MARK: - Private Properties
 
@@ -69,16 +72,18 @@ class StreamViewModel: ObservableObject {
             onCross: { if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1054) } },
             partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
-                    guard let self else { return }
-
-                    if self.isRecording && self.recordingStartTime == nil {
-                        self.recordingStartTime = result.presentationTime
-                    }
-
-                    self.overlay = result
+                    self?.overlay = result
+                    self?.isAligned = self?.isBoxAligned(result.boxDetection) ?? false
                 }
             }
         )
+
+        cameraManager.onRecordingStarted = { @Sendable [weak self] firstFrameTime in
+            Task { @MainActor in
+                guard let self, self.recordingStartTime == nil else { return }
+                self.recordingStartTime = firstFrameTime
+            }
+        }
 
         cameraManager.onRecordingFinished = { @Sendable [weak self] url, error in
             Task { @MainActor in
@@ -94,17 +99,6 @@ class StreamViewModel: ObservableObject {
             }
         }
         
-        cameraManager.onFrameDrop = { @Sendable [weak self] sampleBuffer in
-            let timestamp = sampleBuffer.presentationTimeStamp
-            
-            Task { @MainActor in
-                guard let self else { return }
-                
-                if self.isRecording && self.recordingStartTime == nil {
-                    self.recordingStartTime = timestamp
-                }
-            }
-        }
     }
 
     deinit {
@@ -174,7 +168,8 @@ class StreamViewModel: ObservableObject {
                 try await SessionStore.shared.add(
                     blockCount: blockCount,
                     videoFileName: videoURL.lastPathComponent,
-                    resultsFileName: resultsFileName
+                    resultsFileName: resultsFileName,
+                    handedness: handedness
                 )
             } catch {
                 dprint("StreamViewModel: failed to save the recorded session!")
@@ -206,6 +201,7 @@ class StreamViewModel: ObservableObject {
     /// Starts the camera feed and begins frame processing
     func startCamera() async {
         await cameraManager.start()
+        captureSession = cameraManager.captureSession
 
         if let stream = cameraManager.frameStream {
             await frameProcessor.startProcessing(stream: stream)
@@ -285,5 +281,27 @@ class StreamViewModel: ObservableObject {
         }
 
         cameraManager.stopRecording()
+    }
+
+    private func isBoxAligned(_ box: BoxDetection?) -> Bool {
+        guard let box else { return false }
+
+        // BoxShapeConstants use screen-space y (0 = top).
+        // NormalizedPoint stores Vision-space y (0 = bottom), so flip with (1 - y).
+        let checks: [(String, Double, Double)] = [
+            ("Back top left",      Double(LiveUIConstants.backLeftX),         1 - Double(LiveUIConstants.backRimY)),
+            ("Back top right",     Double(LiveUIConstants.backRightX),        1 - Double(LiveUIConstants.backRimY)),
+            ("Front top left",     Double(LiveUIConstants.frontTopLeftX),     1 - Double(LiveUIConstants.frontRimY)),
+            ("Front top right",    Double(LiveUIConstants.frontTopRightX),    1 - Double(LiveUIConstants.frontRimY)),
+            ("Front bottom left",  Double(LiveUIConstants.frontBottomLeftX),  1 - Double(LiveUIConstants.bottomY)),
+            ("Front bottom right", Double(LiveUIConstants.frontBottomRightX), 1 - Double(LiveUIConstants.bottomY)),
+        ]
+
+        return checks.allSatisfy { name, gx, gy in
+            let loc = box[name].location
+            let dx = Double(loc.x) - gx
+            let dy = Double(loc.y) - gy
+            return (dx * dx + dy * dy).squareRoot() < LiveUIConstants.offTolerant
+        }
     }
 }

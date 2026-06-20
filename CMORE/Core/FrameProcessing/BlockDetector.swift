@@ -12,8 +12,9 @@ import Accelerate
 import Playgrounds
 
 struct BlockObservation: BoundingBoxProviding, Codable {
-    let confidence: Float
+    var confidence: Float? = nil
     var boundingBox: NormalizedRect
+    var id: UUID? = nil
 }
 
 nonisolated fileprivate let INPUTSIZE = CGSize(width: 640, height: 640)
@@ -43,7 +44,7 @@ struct BlockDetector {
     /// with coordinates in pixel space (640x640).
     static func processOutput(
         _ output: [any VisionObservation],
-        confThresh: Float = 0.5
+        confThresh: Float = FrameProcessingThresholds.blockDetectionConfidenceThreshold
     ) -> [BlockObservation] {
         
         let observations = output as! [CoreMLFeatureValueObservation]

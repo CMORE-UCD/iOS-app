@@ -23,32 +23,30 @@ struct StreamView: View {
 
             // MARK: - Live Preview (fits into available space; no cropping)
             Group {
-                if let session = viewModel.captureSession {
-                    // Live camera preview with overlay in a ZStack
-                    ZStack {
+                ZStack {
+                    if let session = viewModel.captureSession {
                         CameraPreviewView(session: session)
                         
-                        // Face bounding boxes overlay, constrained to the same space as camera preview
-                        GeometryReader { localGeo in
-                            if let overlay = viewModel.overlay {
-                                OverlayView(overlay, localGeo, viewModel.handedness)
-                            }
-                        }
+                    } else {
+                        Image("placeHolder")
+                            .resizable()
+                            .scaledToFill()
                     }
-                    .aspectRatio(streamAspect, contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Placeholder when camera is not available yet, maintaining 16:9 fit.
-                    Color.black
-                        .aspectRatio(streamAspect, contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(
-                            Text("Camera will appear here")
-                                .foregroundColor(.white)
-                                .font(.title2)
-                        )
+                    // Overlay constrained to the same space as camera preview
+                    GeometryReader { localGeo in
+                        if let overlay = viewModel.overlay {
+                            OverlayView(overlay, localGeo, viewModel.handedness)
+                        }
+                        BoxShape()
+                            .stroke(
+                                viewModel.isAligned ? Color.white.opacity(0.9) : Color.black.opacity(0.6),
+                                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+                            )
+                    }
                 }
             }
+            .aspectRatio(streamAspect, contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             StreamUI(viewModel)
         }

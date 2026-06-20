@@ -56,7 +56,7 @@ struct SessionReplayView: View {
                 
                 GeometryReader { geo in
                     if let frameResult = viewModel.currentFrameResult {
-                        OverlayView(frameResult, geo)
+                        OverlayView(frameResult, geo, viewModel.handedness)
                     }
                 }
             }

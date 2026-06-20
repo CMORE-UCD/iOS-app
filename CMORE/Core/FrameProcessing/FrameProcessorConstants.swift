@@ -8,25 +8,17 @@ import AVFoundation
 
 nonisolated enum FrameProcessingThresholds {
     /// Minimum confidence to keep a detected block
-    static let blockConfidenceThreshold: Float = 0.5
+    static let blockDetectionConfidenceThreshold: Float = 0.5
+    
+    /// Minimum confidence to keep a block from tracker
+    static let blockTrackedConfidenceThreshold: Float = 0.3
 
-    /// Maximum fraction of an ROI covered by the hand ROI before we skip it
-    static let roiOverlapThreshold: CGFloat = 0.8
+    /// Minimum iou to match
+    static let iouThreshold: CGFloat = 0.4
 
-    /// Multiplier on block length for "released" distance
-    static let releasedDistanceMultiplier: Double = 1.5
-
-    /// Multiplier on block size for ROI expansion around hand
-    static let handBoxExpansionMultiplier: CGFloat = 2.0
-
-    /// Multiplier on block size for ROI centered on a block center (offset = 2x, size = 4x)
-    static let blockCenterROIMultiplier: Double = 2.0
-
-    /// Number of recent frames to search for past block detections
-    static let recentFrameLookback: Int = 6
-
-    /// Maximum time interval between two hand results for linear projection
-    static let maxProjectionInterval: CMTime = CMTime(value: 1, timescale: 2)
+    /// IoU above which an unmatched detection is considered "near" an existing tracker
+    /// and therefore suppressed from spawning a duplicate tracker.
+    static let trackerVicinityIoUThreshold: CGFloat = 0.2
 
     /// Maximum frames buffered in the CameraManager's AsyncStream before newest-wins
     static let frameBufferSize: Int = 6
@@ -36,4 +28,13 @@ nonisolated enum FrameProcessingThresholds {
 
     /// Time interval for updating box 
     static let boxUpdateInterval: CMTime = CMTime(value: 1, timescale: 1) // 1 second
+    
+    /// Maximum of tracker at once
+    static let maxNumTrackers: Int = 1
+    
+    /// Maximum iou for not consider stalled
+    static let stallIoUThreshold: CGFloat = 0.9
+    
+    /// Maximum frames look back for tracked blocks
+    static let trackedBlockLookBack: Int = 6
 }

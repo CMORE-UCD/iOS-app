@@ -183,7 +183,7 @@ class VideoProcessingViewModel: ObservableObject {
     }
 
     private func saveSession(results: [FrameResult]) {
-        guard let videoURL else { return }
+        guard let videoURL, let handedness else { return }
 
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let suffix = Date().timeIntervalSince1970
@@ -204,7 +204,12 @@ class VideoProcessingViewModel: ObservableObject {
         }
 
         do {
-            let data = try JSONEncoder().encode(results)
+            let firstTime = results.first?.presentationTime ?? .zero
+            let data = try JSONEncoder().encode(results.map {
+                var tmp = $0
+                tmp.presentationTime = tmp.presentationTime - firstTime
+                return tmp
+            })
             try data.write(to: resultsURL)
         } catch {
             #if DEBUG
@@ -219,7 +224,8 @@ class VideoProcessingViewModel: ObservableObject {
                 try await SessionStore.shared.add(
                     blockCount: blockCount,
                     videoFileName: videoFileName,
-                    resultsFileName: resultsFileName
+                    resultsFileName: resultsFileName,
+                    handedness: handedness
                 )
             } catch{
                 dprint("Video Processing View Model: fail to save the session")
