@@ -37,11 +37,13 @@ struct StreamView: View {
                         if let overlay = viewModel.overlay {
                             OverlayView(overlay, localGeo, viewModel.handedness)
                         }
-                        BoxShape()
-                            .stroke(
-                                viewModel.isAligned ? Color.white.opacity(0.9) : Color.black.opacity(0.6),
-                                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
-                            )
+                        if !viewModel.isRecording {
+                            BoxShape()
+                                .stroke(
+                                    viewModel.isAligned ? Color.white.opacity(0.9) : Color.black.opacity(0.6),
+                                    style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+                                )
+                        }
                     }
                 }
             }

@@ -72,7 +72,13 @@ class StreamViewModel: ObservableObject {
             onCross: { if !UserDefaults.standard.bool(forKey: "soundMuted") { AudioServicesPlaySystemSound(1054) } },
             partialResult: { @Sendable [weak self] result in
                 Task { @MainActor in
+                    let box = result.boxDetection != nil ? result.boxDetection : self?.overlay?.boxDetection
                     self?.overlay = result
+                    self?.overlay?.boxDetection = box
+                    
+                    if let isRecording = self?.isRecording, isRecording {
+                        return // early return
+                    }
                     self?.isAligned = self?.isBoxAligned(result.boxDetection) ?? false
                 }
             }
