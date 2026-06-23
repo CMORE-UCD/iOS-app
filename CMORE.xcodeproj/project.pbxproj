@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8AF8E9DA2FEAFA0A0000518A /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = 8AF8E9D92FEAFA0A0000518A /* ArgumentParser */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8A05439F2E55657D00BE2B01 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -55,6 +59,7 @@
 			membershipExceptions = (
 				Core/FrameProcessing/BlockDetector.swift,
 				Core/FrameProcessing/BoxDetector.swift,
+				Core/FrameProcessing/CameraSettings.swift,
 				Core/FrameProcessing/Counter.swift,
 				Core/FrameProcessing/FrameProcessor.swift,
 				Core/FrameProcessing/FrameProcessorConstants.swift,
@@ -64,6 +69,7 @@
 				Core/ML_models/KeypointDetector.mlpackage,
 				Core/ML_models/ObjectDetector.mlpackage,
 				Core/Tools.swift,
+				Screens/ProcessImportedVideo/VideoFrameExtractor.swift,
 				Storage/Session.swift,
 				Storage/SessionStore.swift,
 			);
@@ -124,6 +130,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8AF8E9DA2FEAFA0A0000518A /* ArgumentParser in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -141,7 +148,15 @@
 				8A19DD792E610B010038DD1E /* CMOREUITests.xctest */,
 				8A0FD1A92FEAEAAD003958D4 /* CMORECLI */,
 				8A0FD1AA2FEAEAAD003958D4 /* CMORECLI */,
+				8AB323D22FEAF8BB00F6A2CB /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		8AB323D22FEAF8BB00F6A2CB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -232,6 +247,7 @@
 			);
 			name = CMORECLI;
 			packageProductDependencies = (
+				8AF8E9D92FEAFA0A0000518A /* ArgumentParser */,
 			);
 			productName = CMORECLI;
 			productReference = 8A0FD1A92FEAEAAD003958D4 /* CMORECLI */;
@@ -273,6 +289,7 @@
 			mainGroup = 8A0543872E55657C00BE2B01;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				8A0FD1BF2FEAF100003958D4 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8A0543872E55657C00BE2B01;
@@ -701,6 +718,7 @@
 		8A0FD1AD2FEAEAAD003958D4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = CL66Q6N49J;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -777,6 +795,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8A0FD1BF2FEAF100003958D4 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.8.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8AF8E9D92FEAFA0A0000518A /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8A0FD1BF2FEAF100003958D4 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8A0543882E55657C00BE2B01 /* Project object */;
 }

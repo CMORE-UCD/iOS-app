@@ -408,7 +408,7 @@ actor FrameProcessor {
                     id: trackerID
                 ))
                 
-                print("Detector missed tracker \(trackerID). Falling back to tracked rectangle.")
+                dprint("Detector missed tracker \(trackerID). Falling back to tracked rectangle.")
             }
         }
 
