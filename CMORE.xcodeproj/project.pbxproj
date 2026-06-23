@@ -65,6 +65,7 @@
 				Core/FrameProcessing/FrameProcessorConstants.swift,
 				Core/FrameProcessing/FrameProcessorState.swift,
 				Core/FrameProcessing/FrameResult.swift,
+				Core/FrameProcessing/VideoPipeline.swift,
 				Core/FrameProcessing/VisionExtensions.swift,
 				Core/ML_models/KeypointDetector.mlpackage,
 				Core/ML_models/ObjectDetector.mlpackage,

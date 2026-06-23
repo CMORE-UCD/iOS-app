@@ -1,42 +1,40 @@
 //
-//  PipelineRunner.swift
-//  CMORECLI
+//  VideoPipeline.swift
+//  CMORE
 //
 
 import AVFoundation
 import CoreImage
 import Vision
 
-actor PipelineRunner {
+actor VideoPipeline {
+    typealias FrameCallback = @Sendable (FrameResult, CIImage) -> Void
+
     private enum Phase { case scanning, counting }
 
     private let extractor: VideoFrameExtractor
+    private let onFrame: FrameCallback?
+
     private var frameProcessor: FrameProcessor?
     private var phase: Phase = .scanning
-    private var handedness: HumanHandPoseObservation.Chirality?
+    private(set) var handedness: HumanHandPoseObservation.Chirality?
     private var continuation: AsyncStream<(CIImage, CMTime)>.Continuation?
     private var transitionTask: Task<Void, Never>?
     private var doneContinuation: CheckedContinuation<[FrameResult]?, Never>?
 
-    init(videoURL: URL) {
+    init(videoURL: URL, onFrame: FrameCallback? = nil) {
         extractor = VideoFrameExtractor(url: videoURL)
+        self.onFrame = onFrame
     }
 
-    // Called after init to avoid escaping-self capture during initialization.
-    nonisolated func setup() {
-        let fp = FrameProcessor(
-            fullResult: { @Sendable [weak self] result, _ in
+    func run() async -> [FrameResult]? {
+        let callback = onFrame
+        frameProcessor = FrameProcessor(
+            fullResult: { @Sendable [weak self] result, image in
+                callback?(result, image)
                 Task { await self?.onFrameProcessed(result) }
             }
         )
-        Task { await self.setProcessor(fp) }
-    }
-
-    private func setProcessor(_ fp: FrameProcessor) {
-        frameProcessor = fp
-    }
-
-    func process() async -> [FrameResult]? {
         if let error = await extractor.validate() {
             fputs("Video validation failed: \(error)\n", stderr)
             return nil

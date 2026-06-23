@@ -33,10 +33,9 @@ struct Command: AsyncParsableCommand {
                 .appendingPathComponent("CMORE_Results_\(stem).json")
         }()
 
-        let runner = PipelineRunner(videoURL: videoURL)
-        runner.setup()
+        let pipeline = VideoPipeline(videoURL: videoURL)
 
-        guard let results = await runner.process(), !results.isEmpty else {
+        guard let results = await pipeline.run(), !results.isEmpty else {
             throw ValidationError("Processing failed or produced no results.")
         }
 
