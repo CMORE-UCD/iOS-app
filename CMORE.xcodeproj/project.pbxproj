@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8AF8E9DA2FEAFA0A0000518A /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = 8AF8E9D92FEAFA0A0000518A /* ArgumentParser */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8A05439F2E55657D00BE2B01 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -23,7 +27,20 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		8A0FD1A72FEAEAAD003958D4 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		8A0FD1A92FEAEAAD003958D4 /* CMORECLI */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CMORECLI; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A19DD772E610B010038DD1E /* CMORE.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CMORE.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A19DD782E610B010038DD1E /* CMORETests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CMORETests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A19DD792E610B010038DD1E /* CMOREUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CMOREUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -37,6 +54,28 @@
 			);
 			target = 8A05438F2E55657C00BE2B01 /* CMORE */;
 		};
+		8A0FD1B22FEAEB1F003958D4 /* Exceptions for "CMORE" folder in "CMORECLI" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/FrameProcessing/BlockDetector.swift,
+				Core/FrameProcessing/BoxDetector.swift,
+				Core/FrameProcessing/CameraSettings.swift,
+				Core/FrameProcessing/Counter.swift,
+				Core/FrameProcessing/FrameProcessor.swift,
+				Core/FrameProcessing/FrameProcessorConstants.swift,
+				Core/FrameProcessing/FrameProcessorState.swift,
+				Core/FrameProcessing/FrameResult.swift,
+				Core/FrameProcessing/VideoPipeline.swift,
+				Core/FrameProcessing/VisionExtensions.swift,
+				Core/ML_models/KeypointDetector.mlpackage,
+				Core/ML_models/ObjectDetector.mlpackage,
+				Core/Tools.swift,
+				Screens/ProcessImportedVideo/VideoFrameExtractor.swift,
+				Storage/Session.swift,
+				Storage/SessionStore.swift,
+			);
+			target = 8A0FD1A82FEAEAAD003958D4 /* CMORECLI */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,6 +83,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				8A0543BC2E55678E00BE2B01 /* Exceptions for "CMORE" folder in "CMORE" target */,
+				8A0FD1B22FEAEB1F003958D4 /* Exceptions for "CMORE" folder in "CMORECLI" target */,
 			);
 			path = CMORE;
 			sourceTree = "<group>";
@@ -56,6 +96,11 @@
 		8A0543AB2E55657D00BE2B01 /* CMOREUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = CMOREUITests;
+			sourceTree = "<group>";
+		};
+		8A0FD1AA2FEAEAAD003958D4 /* CMORECLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = CMORECLI;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -82,6 +127,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8A0FD1A62FEAEAAD003958D4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8AF8E9DA2FEAFA0A0000518A /* ArgumentParser in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -94,7 +147,17 @@
 				8A19DD772E610B010038DD1E /* CMORE.app */,
 				8A19DD782E610B010038DD1E /* CMORETests.xctest */,
 				8A19DD792E610B010038DD1E /* CMOREUITests.xctest */,
+				8A0FD1A92FEAEAAD003958D4 /* CMORECLI */,
+				8A0FD1AA2FEAEAAD003958D4 /* CMORECLI */,
+				8AB323D22FEAF8BB00F6A2CB /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		8AB323D22FEAF8BB00F6A2CB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -168,6 +231,29 @@
 			productReference = 8A19DD792E610B010038DD1E /* CMOREUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		8A0FD1A82FEAEAAD003958D4 /* CMORECLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8A0FD1AF2FEAEAAD003958D4 /* Build configuration list for PBXNativeTarget "CMORECLI" */;
+			buildPhases = (
+				8A0FD1A52FEAEAAD003958D4 /* Sources */,
+				8A0FD1A62FEAEAAD003958D4 /* Frameworks */,
+				8A0FD1A72FEAEAAD003958D4 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8A0FD1AA2FEAEAAD003958D4 /* CMORECLI */,
+			);
+			name = CMORECLI;
+			packageProductDependencies = (
+				8AF8E9D92FEAFA0A0000518A /* ArgumentParser */,
+			);
+			productName = CMORECLI;
+			productReference = 8A0FD1A92FEAEAAD003958D4 /* CMORECLI */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -175,7 +261,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1640;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					8A05438F2E55657C00BE2B01 = {
@@ -189,6 +275,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = 8A05438F2E55657C00BE2B01;
 					};
+					8A0FD1A82FEAEAAD003958D4 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = 8A05438B2E55657C00BE2B01 /* Build configuration list for PBXProject "CMORE" */;
@@ -201,6 +290,7 @@
 			mainGroup = 8A0543872E55657C00BE2B01;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				8A0FD1BF2FEAF100003958D4 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8A0543872E55657C00BE2B01;
@@ -210,6 +300,7 @@
 				8A05438F2E55657C00BE2B01 /* CMORE */,
 				8A05439D2E55657D00BE2B01 /* CMORETests */,
 				8A0543A72E55657D00BE2B01 /* CMOREUITests */,
+				8A0FD1A82FEAEAAD003958D4 /* CMORECLI */,
 			);
 		};
 /* End PBXProject section */
@@ -254,6 +345,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8A0543A42E55657D00BE2B01 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8A0FD1A52FEAEAAD003958D4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -618,6 +716,37 @@
 			};
 			name = Release;
 		};
+		8A0FD1AD2FEAEAAD003958D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = CL66Q6N49J;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		8A0FD1AE2FEAEAAD003958D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = CL66Q6N49J;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -657,7 +786,35 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		8A0FD1AF2FEAEAAD003958D4 /* Build configuration list for PBXNativeTarget "CMORECLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8A0FD1AD2FEAEAAD003958D4 /* Debug */,
+				8A0FD1AE2FEAEAAD003958D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8A0FD1BF2FEAF100003958D4 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.8.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8AF8E9D92FEAFA0A0000518A /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8A0FD1BF2FEAF100003958D4 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8A0543882E55657C00BE2B01 /* Project object */;
 }
