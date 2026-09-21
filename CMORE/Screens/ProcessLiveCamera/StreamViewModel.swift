@@ -296,16 +296,26 @@ class StreamViewModel: ObservableObject {
         return true
     }
     
+    private var soundEffect: AVAudioPlayer?
+
     private func playUnmutableSound(_ soundFileName: String) {
-        var soundEffect: AVAudioPlayer?
-        let path = Bundle.main.path(forResource: soundFileName, ofType:nil)!
-        let url = URL(fileURLWithPath: path)
+        let baseName = (soundFileName as NSString).deletingPathExtension
+        let ext = (soundFileName as NSString).pathExtension
+
+        guard let url = Bundle.main.url(forResource: baseName, withExtension: ext, subdirectory: "SoundAssets")
+            ?? Bundle.main.url(forResource: baseName, withExtension: ext)
+        else {
+            dprint("StreamViewModel: missing sound file \(soundFileName)")
+            return
+        }
 
         do {
             soundEffect = try AVAudioPlayer(contentsOf: url)
-            soundEffect?.play()
+            soundEffect?.prepareToPlay()
+            soundEffect?.play() 
+            //test
         } catch {
-            dprint("StreamViewModel: failed to find sound file")
+            dprint("StreamViewModel: failed to load sound file \(soundFileName): \(error)")
         }
     }
 
