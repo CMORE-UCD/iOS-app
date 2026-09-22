@@ -1,5 +1,6 @@
 # User data
 **/xcuserdata/
+*.DS_Store
 
 # Test resources
 CMORETests/TestResources/*

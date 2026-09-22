@@ -86,6 +86,14 @@ struct StreamUI: View {
         } message: {
             Text("Save this recording to your library?")
         }
+        .alert("New session", isPresented: $viewModel.showStartConfirmation) {
+            Button("Default") {
+                viewModel.startRecording()
+            }
+            Button("Custom Name") {
+                showFileNamingSheet = true
+            }
+        }
         .sheet(isPresented: $showFileNamingSheet) {
             FileNamingSheet(viewModel: viewModel)
                 .interactiveDismissDisabled()
@@ -244,12 +252,16 @@ private struct FileNamingSheet: View {
                     let goodFileName = viewModel.checkExist(fileName: customName)
                     if goodFileName == nil  {
                         // No buttons to recover with — keep the keyboard up
-                        prompt = "That nane exists. Try another!"
+                        prompt = "That name exists. Try another!"
                         isFocused = true
                         return
                     }
                     dismiss()
-                    viewModel.saveSession(nameRequest: goodFileName!)
+                    if viewModel.showStartConfirmation == true {
+                        viewModel.startRecording(nameRequest: goodFileName!)
+                    } else {
+                        viewModel.saveSession(nameRequest: goodFileName!)
+                    }
                 }
         }
         .padding(24)
