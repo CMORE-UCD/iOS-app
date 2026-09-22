@@ -25,6 +25,9 @@ class StreamViewModel: ObservableObject {
     /// Signals that the camera screen can dismiss after the pending recording is handled.
     @Published var shouldDismissCamera = false
 
+    /// Controls whether the camera screen hides the navigation back button.
+    @Published var hideNavigationBackButton = false
+
     /// Show the visualization overlay in real-time
     @Published var overlay: FrameResult?
 
@@ -129,10 +132,12 @@ class StreamViewModel: ObservableObject {
             countdownTask?.cancel()
             countdownTask = nil
             countdown = nil
+            hideNavigationBackButton = false
         } else if isRecording {
             stopRecording()
         } else {
             if (self.startConditionsMet()) {
+                hideNavigationBackButton = true
                 self.showStartConfirmation = true
             }
         }
