@@ -263,4 +263,94 @@ struct BoxDetector {
         
         return unionArea > 0 ? intersectionArea / unionArea : 0
     }
+    
+    // ---- TARGET ZONE CALCULATIONS ----
+    
+    /*
+     NOTES:
+     - need to find how to get frame height + width some other way, possibly already existent
+     - add target zone (array of four integers) as a public object for box detection
+     */
+    
+    /*
+     def setup_target_zone(self):
+         img_height = int(self.cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+         img_width = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH))
+         self.target_zone = self.compute_target_zone(self.df, img_height, img_width)
+     */
+    
+    /*
+     def compute_target_zone(self, df, img_height, img_width):
+         """Computes the target zone, a trapezoidal shape, from keypoints.
+
+         The returned lines are always stored globally; call this once when the box is
+         first detected.
+
+         Args:
+             box_detection: dict with 'keypoints' list; each keypoint has
+                         'position' [x, y] in pixels (Vision y-axis, not flipped yet)
+                         and optional 'confidence'.
+             img_height: frame dimensions in pixels.
+
+         Returns:
+             (top_left, top_right): two (x, y) pixel tuples representing the delimiter
+                                 segment, or None if fewer than 3 keypoints exist.
+         """
+         box_detection = None
+
+         # find first valid box detection
+         for idx in range(0, len(df)):
+             row = df.iloc[idx]
+             box_detection = row.get('boxDetection')  # or row['boxDetection'] if you're sure it exists
+
+             # Adjust validity check to match your data type:
+             if box_detection is None or (hasattr(box_detection, '__len__') and len(box_detection) == 0):
+                 continue  # skip empty/null detections
+
+             break
+
+         keypoints = box_detection.get('keypoints', [])
+         if len(keypoints) < 3:
+             return None
+
+         # Flip y to screen coordinates (same transform used during drawing)
+         pts = []
+         for kp in keypoints:
+             x, y = kp.get('location', {}).get('cgPoint', [0, 0])
+             x_screen = x * img_width
+             y_screen = (1 - y) * img_height
+             pts.append((x_screen, y_screen))
+         
+         top_middle, top_left, top_right = pts[6], pts[8], pts[9]
+         bottom_left, bottom_right = pts[0], pts[4]
+
+         # Split the bottom segment at the x-coordinate of the top point
+         split_x = top_middle[0]
+         # Linearly interpolate y on the segment top_left→top_right at x=split_x
+         if top_right[0] != top_left[0]:
+             t = (split_x - top_left[0]) / (top_right[0] - top_left[0])
+             split_y = top_left[1] + t * (top_right[1] - top_left[1])
+         else:
+             split_y = (top_left[1] + top_right[1]) / 2.0
+         split_pt = (split_x, split_y)
+
+         # Choose the half according to target_side
+         # choose side
+         if self.target_side(split_x, df, img_width) == 'right':
+             top_left = split_pt
+             bottom_left = pts[2]
+         else:
+             top_right = split_pt
+             bottom_right = pts[2]
+
+         print(f"box detection points: {top_left}, {bottom_left}, {top_right}, {bottom_right}.")
+         
+         return {
+             "top_left" : top_left,
+             "bottom_left" : bottom_left,
+             "top_right" : top_right,
+             "bottom_right" : bottom_right
+         }
+
+     */
 }
