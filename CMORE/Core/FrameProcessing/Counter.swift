@@ -24,6 +24,7 @@ struct Counter {
         
         if detection.boxDetection != nil {
             box = detection.boxDetection!
+            box.updateTargetZone(in: CameraSettings.resolution, handedness: handedness)
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
         state = state.transition(by: hands, box, detection.blockDetections)
@@ -63,6 +64,11 @@ struct Counter {
      */
     
     /*
+     def __init__(self, target_zone, frame, threshold: float = 0.25):
+             self.target_zone = target_zone
+             self.set_dimensions(frame)
+             self.threshold = threshold
+
       def update_all(self, frame_result, tracked: 'np.ndarray | None' = None):
           self.update_curr_blocks_in_target(tracked)
           self.update_prev_blocks_in_target()

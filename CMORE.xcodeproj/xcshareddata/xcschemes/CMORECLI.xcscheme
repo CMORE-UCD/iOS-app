@@ -55,6 +55,10 @@
       <CommandLineArguments>
          <CommandLineArgument
             argument = "&quot;/Users/ziqiangzhu/CMORE_app/CMORETests/TestResources/Box and Blocks_ZHAE_Affected_FU-002.mov&quot;"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/quyentan/CMORE/CMORE_replay/CMORE_Import_1781735608.141432.mov"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

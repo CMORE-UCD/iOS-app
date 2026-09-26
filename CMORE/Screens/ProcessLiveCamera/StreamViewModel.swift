@@ -154,6 +154,11 @@ class StreamViewModel: ObservableObject {
         } else {
             handedness = .left
         }
+
+        let selectedHandedness = handedness
+        Task {
+            await frameProcessor.updateHandedness(selectedHandedness)
+        }
     }
 
     /// Saves the recording as a session (video stays in Documents, results written to JSON)
