@@ -14,24 +14,46 @@ struct Counter {
     var blockCounts: Int
     var box: BoxDetection
     var results: [FrameResult]
+
+    var movementThreshold: Double = 0.25
+    var activeCountingState = false
+    var previousFrameState: BlockCountingState?
+    var crossedBack = false
+    var countedIDs = Set<UUID>()
+    var currentTargetIDs = Set<UUID>()
+    var coordsLastBlock: CGRect?
+
+    private var targetBlockRegistry: [UUID: [CGRect]] = [:]
+
+    init(
+        handedness: HumanHandPoseObservation.Chirality,
+        state: BlockCountingState,
+        blockCounts: Int,
+        box: BoxDetection,
+        results: [FrameResult]
+    ) {
+        self.handedness = handedness
+        self.state = state
+        self.blockCounts = blockCounts
+        self.box = box
+        self.results = results
+    }
     
     mutating func update(with detection: FrameResult) -> FrameResult {
-        let result: FrameResult
-        defer {
-            results.append(result) //??
-        }
-        
-        
-        if detection.boxDetection != nil {
-            box = detection.boxDetection!
+        dprint("Counter: updating counter!")
+        if let boxDetection = detection.boxDetection {
+            box = boxDetection
             box.updateTargetZone(in: CameraSettings.resolution, handedness: handedness)
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
         state = state.transition(by: hands, box, detection.blockDetections)
-        
-        // update_all(...)
-        
-        result = FrameResult(
+
+        updateCurrentBlocksInTarget(detection.blockDetections)
+        updatePreviousBlocksInTarget()
+        updateBlockCounts()
+        resetCountingState(for: state)
+
+        let result = FrameResult(
             presentationTime: detection.presentationTime,
             state: state,
             blockTransfered: blockCounts,
@@ -39,167 +61,133 @@ struct Counter {
             hands: detection.hands,
             blockDetections: detection.blockDetections
         )
+        results.append(result)
         return result
     }
+
+    private mutating func updateCurrentBlocksInTarget(_ blocks: [BlockObservation]) {
+        for block in blocks {
+            guard let id = block.id,
+                  blockIsInTargetZone(block.boundingBox) else { continue }
+
+            currentTargetIDs.insert(id)
+            var history = targetBlockRegistry[id, default: []]
+            history.append(block.boundingBox.cgRect)
+            targetBlockRegistry[id] = Array(history.suffix(5))
+        }
+        dprint("Counter: \(blocks.count) blocks detected")
+        dprint("Counter: \(currentTargetIDs.count) block ids in target")
+    }
+
+    private mutating func updatePreviousBlocksInTarget() {
+        for id in Array(targetBlockRegistry.keys) where !currentTargetIDs.contains(id) {
+            var history = targetBlockRegistry[id, default: []]
+            history.append(.zero)
+            targetBlockRegistry[id] = Array(history.suffix(5))
+        }
+        currentTargetIDs.removeAll()
+    }
+
+    private mutating func updateBlockCounts() {
+        var countChanged = false
+        dprint("Counter: \(blockCounts) valid blocks")
+        for (id, history) in targetBlockRegistry {
+            guard !activeCountingState,
+                  !countedIDs.contains(id),
+                  hasMovement(in: history) else { continue }
     
-    // TO ADD
-    
-    /*
-     NOTES:
-     - the target zone will be accessible through a target_zone object in box_detector
-     - following variables will need to be declared and added to counter struct:
-            counter = 0
-            height = 0
-            width = 0
-            active_counting_state = False
-            prev_state_result = None
-            crossed_back = False
-            counted_ids = set()
-            curr_target_tids = set()
-            coords_last_block = []
-            target_block_registry: dict[int, Block] = {}   # track_id -> Block
-            target_zone = None
-            threshold = 0
-     - there will be overlap, ie. blockCounts should be used in the place of all 'counter' variable instances
-     */
-    
-    /*
-     def __init__(self, target_zone, frame, threshold: float = 0.25):
-             self.target_zone = target_zone
-             self.set_dimensions(frame)
-             self.threshold = threshold
+            blockCounts += 1
+            countedIDs.insert(id)
+            coordsLastBlock = history.last
+            activeCountingState = true
+            crossedBack = false
+            countChanged = true
+        }
 
-      def update_all(self, frame_result, tracked: 'np.ndarray | None' = None):
-          self.update_curr_blocks_in_target(tracked)
-          self.update_prev_blocks_in_target()
-          self.update_counter()
-          self.reset_states(frame_result)
-     
-     def has_movement(self, block: Block) -> bool:
-         """Return True if the block's center has moved by at least `threshold` fraction
-         of the bbox dimensions across its last-5 history.
+        if !countChanged {
+            coordsLastBlock = nil
+        }
+    }
 
-         Movement is measured as the Chebyshev-style max displacement of the center
-         relative to the mean bbox size (width or height), so the threshold is
-         scale-invariant.
+    private func hasMovement(in history: [CGRect]) -> Bool {
+        guard history.count >= 2 else { return false }
 
-         Args:
-             block:     Block instance with last5box entries [x1, y1, x2, y2] normalized.
-             threshold: Minimum fractional displacement to count as movement (default 0.25).
+        let meanWidth = history.reduce(0.0) { $0 + Double($1.width) } / Double(history.count)
+        let meanHeight = history.reduce(0.0) { $0 + Double($1.height) } / Double(history.count)
+        let referenceSize = max(meanWidth, meanHeight)
+        guard referenceSize > 0 else { return false }
 
-         Returns:
-             bool
-         """
-         if len(block.last5box) < 2:
-             return False
+        guard let first = history.first, let last = history.last else { return false }
+        let firstX = Double(first.midX)
+        let firstY = Double(first.midY)
+        let lastX = Double(last.midX)
+        let lastY = Double(last.midY)
+        let displacement = hypot(lastX - firstX, lastY - firstY)
+        let relativeDisplacement = displacement / referenceSize
+        return relativeDisplacement >= movementThreshold && relativeDisplacement <= 3
+    }
 
-         centers = [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in block.last5box]
-         sizes   = [(b[2] - b[0], b[3] - b[1]) for b in block.last5box]
+    private mutating func resetCountingState(for frameState: BlockCountingState) {
+        if activeCountingState && crossedBack && frameState == .crossed {
+            activeCountingState = false
+        }
 
-         mean_w = sum(s[0] for s in sizes) / len(sizes)
-         mean_h = sum(s[1] for s in sizes) / len(sizes)
-         ref    = max(mean_w, mean_h)  # single scale reference
+        if previousFrameState == .notCrossed && frameState == .crossed {
+            crossedBack = true
+        }
 
-         if ref == 0:
-             return False
+        previousFrameState = frameState
+    }
 
-         first_cx, first_cy = centers[0]
-         last_cx,  last_cy  = centers[-1]
+    private func blockIsInTargetZone(_ normalizedRect: NormalizedRect) -> Bool {
+        let zoneKeys = ["topLeft", "topRight", "bottomRight", "bottomLeft"]
+        guard zoneKeys.allSatisfy({ box.targetZone[$0] != nil }) else { return false }
 
-         displacement = ((last_cx - first_cx) ** 2 + (last_cy - first_cy) ** 2) ** 0.5
-         return 3 >= (displacement / ref) >= self.threshold
-     
-     def update_curr_blocks_in_target(self, tracked: 'np.ndarray | None' = None):
-         if tracked is not None and len(tracked) > 0:
-             for row in tracked:
-                 x1, y1, x2, y2, tid = row[0], row[1], row[2], row[3], int(row[4])
-                 px1, py1 = int(x1 * self.width), int(y1 * self.height)
-                 px2, py2 = int(x2 * self.width), int(y2 * self.height)
+        let size = CameraSettings.resolution
+        let polygon = zoneKeys.compactMap { box.targetZone[$0] }
+        let rect = normalizedRect.toImageCoordinates(size)
+        let corners = [
+            SIMD2<Float>(Float(rect.minX), Float(rect.minY)),
+            SIMD2<Float>(Float(rect.maxX), Float(rect.minY)),
+            SIMD2<Float>(Float(rect.minX), Float(rect.maxY)),
+            SIMD2<Float>(Float(rect.maxX), Float(rect.maxY))
+        ]
 
-                 if self.tracker_block_in_target_zone([px1, py1, px2, py2]):
-                     self.curr_target_tids.add(tid)
+        return corners.contains { pointInPolygon($0, polygon) }
+    }
 
-                     if tid not in self.target_block_registry:
-                         self.target_block_registry[tid] = Block(id=tid)
-                     
-                     self.target_block_registry[tid].update([x1, y1, x2, y2])
+    private func pointInPolygon(_ point: SIMD2<Float>, _ polygon: [SIMD2<Float>]) -> Bool {
+        guard polygon.count >= 3 else { return false }
+        var isInside = false
 
-     def update_prev_blocks_in_target(self):
-         for tid in self.target_block_registry:
-             if tid not in self.curr_target_tids:
-                 self.target_block_registry[tid].update([0, 0, 0, 0])
-         
-         self.curr_target_tids.clear()
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            let edge = end - start
+            let offset = point - start
+            let cross = edge.x * offset.y - edge.y * offset.x
 
-     def update_counter(self):
-         counter_changed = False
-         for tid, blk in self.target_block_registry.items():
-             if self.active_counting_state:
-                 continue
-             if not self.has_movement(blk):
-                 continue
-             if tid in self.counted_ids:
-                 continue
+            if abs(cross) < 0.001,
+               point.x >= min(start.x, end.x), point.x <= max(start.x, end.x),
+               point.y >= min(start.y, end.y), point.y <= max(start.y, end.y) {
+                return true
+            }
 
-             counter_changed = True
-             self.counter += 1
-             self.counted_ids.add(tid)
-             self.coords_last_block = blk.last5box[-1]
-             self.active_counting_state = True
-             self.crossed_back = False
-         
-         if not counter_changed:
-             self.coords_last_block = None
-     
-     def set_dimensions(self, frame):
-         annotated = frame.copy()
-         self.height, self.width, _ = annotated.shape
+            let crossesEdge = (start.y > point.y) != (end.y > point.y)
+            if crossesEdge {
+                let intersectionX = start.x + (point.y - start.y) * (end.x - start.x) / (end.y - start.y)
+                if point.x < intersectionX {
+                    isInside.toggle()
+                }
+            }
+        }
 
-     def reset_states(self, frame_state_result):
-         if self.active_counting_state and self.crossed_back and frame_state_result == 'crossed':
-             self.active_counting_state = False
+        return isInside
+    }
+}
 
-         if self.prev_state_result and self.prev_state_result == 'notCrossed' and frame_state_result == 'crossed':
-             self.crossed_back = True
-
-         self.prev_state_result = frame_state_result
-
-     def tracker_block_in_target_zone(self, scaled_norm):
-         """Return True if a cgRect bounding box overlaps the x and y-range of the delimiter line.
-
-         Args:
-             scaled_norm: [px1, py1, px2, py2] — normalized and scaled Vision coord.
-
-         Returns:
-             bool
-         """
-         block_x1, block_y1, block_x2, block_y2 = scaled_norm
-
-         poly = self.trapezoid_polygon()
-
-         # Check all four corners of the block bbox
-         corners = [
-             (block_x1, block_y1),  # top-left
-             (block_x2, block_y1),  # top-right
-             (block_x1, block_y2),  # bottom-left
-             (block_x2, block_y2),  # bottom-right
-         ]
-         for pt in corners:
-             # >= 0 means inside or on the edge
-             if cv.pointPolygonTest(poly, pt, measureDist=False) >= 0:
-                 return True
-
-         return False
-     
-     def trapezoid_polygon(self):
-         """Return the trapezoid as an ordered numpy contour for cv.pointPolygonTest.
-         Order: top-left → top-right → bottom-right → bottom-left (clockwise).
-         """
-         return np.array([
-             self.target_zone["top_left"],
-             self.target_zone["top_right"],
-             self.target_zone["bottom_right"],
-             self.target_zone["bottom_left"],
-         ], dtype=np.float32)
-     */
+private extension NormalizedRect {
+    var cgRect: CGRect {
+        CGRect(x: origin.x, y: origin.y, width: width, height: height)
+    }
 }

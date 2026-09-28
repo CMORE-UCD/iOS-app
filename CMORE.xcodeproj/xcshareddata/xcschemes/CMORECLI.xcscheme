@@ -61,6 +61,10 @@
             argument = "/Users/quyentan/CMORE/CMORE_replay/CMORE_Import_1781735608.141432.mov"
             isEnabled = "YES">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/quyentan/CMORE/CMORE_replay/CMORE_Import_MASR-Affected.mov"
+            isEnabled = "YES">
+         </CommandLineArgument>
       </CommandLineArguments>
    </LaunchAction>
    <ProfileAction

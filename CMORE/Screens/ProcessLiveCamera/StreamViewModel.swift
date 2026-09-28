@@ -31,6 +31,9 @@ class StreamViewModel: ObservableObject {
     /// Show the visualization overlay in real-time
     @Published var overlay: FrameResult?
 
+    /// Current block total from the ordered counting pipeline
+    @Published var blockCounts = 0
+
     /// Use to help identify which hand we are looking at
     @Published var handedness: HumanHandPoseObservation.Chirality = .right
 
@@ -93,6 +96,11 @@ class StreamViewModel: ObservableObject {
                         return // early return
                     }
                     self?.isAligned = self?.isBoxAligned(result.boxDetection) ?? false
+                }
+            },
+            fullResult: { @Sendable [weak self] result, _ in
+                Task { @MainActor in
+                    self?.blockCounts = result.blockTransfered ?? 0
                 }
             }
         )
@@ -331,6 +339,7 @@ class StreamViewModel: ObservableObject {
 
     private func actuallyStartRecording(_ nameRequest: String? = nil) {
         self.playUnmutableSound("beep.mp3") // "begin recording" chime
+        blockCounts = 0
         isRecording = true
         recordingTimeRemaining = maxRecordingSeconds
 

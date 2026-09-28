@@ -29,6 +29,14 @@ struct StreamUI: View {
                             viewModel.toggleHandedness()
                         }
                     }
+                HStack(spacing: 6) {
+                    Text("\(viewModel.blockCounts)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
                 Spacer()
             }
 

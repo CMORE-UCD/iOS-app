@@ -124,6 +124,13 @@ nonisolated struct BoxDetection: Codable, Sendable {
                 "topRight": split,
                 "bottomRight": pixelPosition(of: "Front top middle", in: size)
             ]
+        case .right:
+            targetZone = [
+                "topLeft": split,
+                "bottomLeft": pixelPosition(of: "Front top middle", in: size),
+                "topRight": topRight,
+                "bottomRight": bottomRight
+            ]
         @unknown default:
             targetZone = [
                 "topLeft": split,
