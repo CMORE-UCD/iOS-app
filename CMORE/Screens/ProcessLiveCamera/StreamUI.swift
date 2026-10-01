@@ -24,6 +24,19 @@ struct StreamUI: View {
             VStack{
                 HandednessIndicator(handedness: viewModel.handedness)
                     .padding(.top, 5)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            viewModel.toggleHandedness()
+                        }
+                    }
+                HStack(spacing: 6) {
+                    Text("\(viewModel.blockCounts)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
                 Spacer()
             }
 
@@ -58,21 +71,6 @@ struct StreamUI: View {
         }
         .background(Color.clear)
         .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 50)
-                .onEnded { gesture in
-                    
-                    let horizontalMovement = gesture.translation.width
-                    let verticalMovement = gesture.translation.height
-                    
-                    // Check if it's more horizontal than vertical (true swipe)
-                    if abs(horizontalMovement) > abs(verticalMovement) {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            viewModel.toggleHandedness()
-                        }
-                    }
-                }
-        )
         .alert("Save session?", isPresented: $viewModel.showSaveConfirmation) {
             Button("Save") {
                 viewModel.saveSession()
