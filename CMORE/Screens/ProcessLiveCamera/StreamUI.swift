@@ -84,13 +84,8 @@ struct StreamUI: View {
         } message: {
             Text("Save this recording to your library?")
         }
-        .alert("New session", isPresented: $viewModel.showStartConfirmation) {
-            Button("Default") {
-                viewModel.startRecording()
-            }
-            Button("Custom Name") {
-                showFileNamingSheet = true
-            }
+        .sheet(isPresented: $viewModel.showStartConfirmation) {
+            FileNamingSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $showFileNamingSheet) {
             FileNamingSheet(viewModel: viewModel)
@@ -233,7 +228,7 @@ private struct FileNamingSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var customName: String = ""
-    @State private var prompt: String = "Enter a custom file name"
+    @State private var prompt: String = "Name your session"
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -254,18 +249,25 @@ private struct FileNamingSheet: View {
                         isFocused = true
                         return
                     }
-                    dismiss()
                     if viewModel.showStartConfirmation == true {
                         viewModel.startRecording(nameRequest: goodFileName!)
                     } else {
                         viewModel.saveSession(nameRequest: goodFileName!)
                     }
+                    dismiss()
                 }
+            Button("Default Name") {
+                if viewModel.showStartConfirmation == true {
+                    viewModel.startRecording()
+                } else {
+                    viewModel.saveSession()
+                }
+                dismiss()
+            }
+            .font(.system(size: 18))
+            .buttonStyle(.bordered)
         }
         .padding(24)
-        .onAppear {
-            isFocused = true
-        }
     }
 }
 

@@ -285,6 +285,7 @@ class StreamViewModel: ObservableObject {
     /// Runs the 3-second countdown then starts video recording
     func startRecording(nameRequest: String? = nil) {
         self.showStartConfirmation = false
+        dprint("showing countdown")
         countdownTask = Task { @MainActor [weak self] in
             guard let self else { return }
             Task { await self.frameProcessor.warmup() }
