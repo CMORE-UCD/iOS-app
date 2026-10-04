@@ -89,7 +89,6 @@ struct StreamUI: View {
         }
         .sheet(isPresented: $showFileNamingSheet) {
             FileNamingSheet(viewModel: viewModel)
-                .interactiveDismissDisabled()
         }
         .alert("Camera need to see the box before starting counting blocks.", isPresented: $viewModel.askForBox) {
             Button("Resume") {
@@ -268,6 +267,7 @@ private struct FileNamingSheet: View {
             .buttonStyle(.bordered)
         }
         .padding(24)
+        .interactiveDismissDisabled()
     }
 }
 

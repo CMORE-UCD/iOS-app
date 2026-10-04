@@ -44,6 +44,7 @@
 		8A19DD772E610B010038DD1E /* CMORE.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CMORE.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A19DD782E610B010038DD1E /* CMORETests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CMORETests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A19DD792E610B010038DD1E /* CMOREUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CMOREUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8AEBF1BE30731AB900793583 /* override.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = override.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -141,6 +142,7 @@
 		8A0543872E55657C00BE2B01 = {
 			isa = PBXGroup;
 			children = (
+				8AEBF1BE30731AB900793583 /* override.xcconfig */,
 				8A0543922E55657C00BE2B01 /* CMORE */,
 				8A0543A12E55657D00BE2B01 /* CMORETests */,
 				8A0543AB2E55657D00BE2B01 /* CMOREUITests */,
@@ -376,6 +378,7 @@
 /* Begin XCBuildConfiguration section */
 		8A0543B02E55657D00BE2B01 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8AEBF1BE30731AB900793583 /* override.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -410,7 +413,6 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = L4TQ6C2R74;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -440,6 +442,7 @@
 		};
 		8A0543B12E55657D00BE2B01 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8AEBF1BE30731AB900793583 /* override.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -474,7 +477,6 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = L4TQ6C2R74;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -502,9 +504,8 @@
 				CODE_SIGN_ENTITLEMENTS = CMORE/CMORE.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 2K859C3HFC;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -532,8 +533,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 0.0.3;
-				PRODUCT_BUNDLE_IDENTIFIER = ucdavis.edu.cmore.test;
+				MARKETING_VERSION = 0.0.5;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -559,9 +559,8 @@
 				CODE_SIGN_ENTITLEMENTS = CMORE/CMORE.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 2K859C3HFC;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -589,8 +588,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 0.0.3;
-				PRODUCT_BUNDLE_IDENTIFIER = ucdavis.edu.cmore.test;
+				MARKETING_VERSION = 0.0.5;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -615,7 +613,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = CL66Q6N49J;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -645,7 +642,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = CL66Q6N49J;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -674,7 +670,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = L4TQ6C2R74;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
@@ -698,7 +693,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = L4TQ6C2R74;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
@@ -721,7 +715,6 @@
 			buildSettings = {
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = CL66Q6N49J;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -736,7 +729,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = CL66Q6N49J;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -11,3 +11,6 @@ instruction.md
 
 # docs for LLMs
 docs/
+
+# Per-developer signing settings 
+override.xcconfig
