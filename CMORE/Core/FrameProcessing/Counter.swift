@@ -13,6 +13,7 @@ struct Counter {
     var state: BlockCountingState
     var blockCounts: Int
     var box: BoxDetection
+    var target: TargetZone
     var results: [FrameResult]
 
     var movementThreshold: Double = 0.25
@@ -37,13 +38,14 @@ struct Counter {
         self.blockCounts = blockCounts
         self.box = box
         self.results = results
+        self.target = TargetZone(handedness, box)
     }
     
     mutating func update(with detection: FrameResult) -> FrameResult {
         dprint("Counter: updating counter!")
-        if let boxDetection = detection.boxDetection {
-            box = boxDetection
-            box.updateTargetZone(in: CameraSettings.resolution, handedness: handedness)
+        if detection.boxDetection != nil {
+            box = detection.boxDetection!
+            target.updateTargetZone(box)
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
         state = state.transition(by: hands, box, detection.blockDetections)
@@ -139,24 +141,27 @@ struct Counter {
         previousFrameState = frameState
     }
 
-    private func blockIsInTargetZone(_ normalizedRect: NormalizedRect) -> Bool {
-        let zoneKeys = ["topLeft", "topRight", "bottomRight", "bottomLeft"]
-        guard zoneKeys.allSatisfy({ box.targetZone[$0] != nil }) else { return false }
+    private func blockIsInTargetZone(_ rect: NormalizedRect) -> Bool {
+        let targetKeys = ["topLeft", "topRight", "bottomRight", "bottomLeft"]
 
-        let size = CameraSettings.resolution
-        let polygon = zoneKeys.compactMap { box.targetZone[$0] }
-        let rect = normalizedRect.toImageCoordinates(size)
+        let polygon = targetKeys.compactMap { target[$0].location }
+
+        let x = rect.origin.x
+        let y = rect.origin.y
+        let width = rect.width
+        let height = rect.height
+
         let corners = [
-            SIMD2<Float>(Float(rect.minX), Float(rect.minY)),
-            SIMD2<Float>(Float(rect.maxX), Float(rect.minY)),
-            SIMD2<Float>(Float(rect.minX), Float(rect.maxY)),
-            SIMD2<Float>(Float(rect.maxX), Float(rect.maxY))
+            NormalizedPoint(x: x,         y: y),
+            NormalizedPoint(x: x + width, y: y),
+            NormalizedPoint(x: x,         y: y + height),
+            NormalizedPoint(x: x + width, y: y + height)
         ]
 
         return corners.contains { pointInPolygon($0, polygon) }
     }
 
-    private func pointInPolygon(_ point: SIMD2<Float>, _ polygon: [SIMD2<Float>]) -> Bool {
+    private func pointInPolygon(_ point: NormalizedPoint, _ polygon: [NormalizedPoint]) -> Bool {
         guard polygon.count >= 3 else { return false }
         var isInside = false
 
@@ -183,11 +188,5 @@ struct Counter {
         }
 
         return isInside
-    }
-}
-
-private extension NormalizedRect {
-    var cgRect: CGRect {
-        CGRect(x: origin.x, y: origin.y, width: width, height: height)
     }
 }

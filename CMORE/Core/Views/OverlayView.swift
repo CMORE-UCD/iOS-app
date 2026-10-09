@@ -28,7 +28,10 @@ struct OverlayView: View {
         
         if let boxDetection = overlay.boxDetection {
             BoxView(geometry, boxDetection)
-            TargetZoneView(geometry, boxDetection)
+        }
+
+        if let target = overlay.targetDetection {
+            TargetZoneView(geometry, targetDetection)
         }
         
         if let hands = overlay.hands {
@@ -96,44 +99,17 @@ struct BoxView: View {
 
 struct TargetZoneView: View {
     let geo: GeometryProxy
-    let box: BoxDetection
-
-    init(_ geo: GeometryProxy, _ box: BoxDetection) {
+    let target: TargetZone
+    let normalizedKeypoints: [NormalizedPoint]
+    let targetColor: Color = .yellow
+    
+    init(_ geo: GeometryProxy, _ target: TargetZone) {
         self.geo = geo
-        self.box = box
+        self.target = target
+        self.normalizedKeypoints = target.targetpoints.map { $0.location }
     }
-
+    
     var body: some View {
-        let targetPolygon = targetZonePolygon()
-
-        return Group {
-            if !targetPolygon.isEmpty {
-                Path { path in
-                    path.move(to: targetPolygon[0])
-                    for point in targetPolygon.dropFirst() {
-                        path.addLine(to: point)
-                    }
-                    path.closeSubpath()
-                }
-                .stroke(Color.yellow, lineWidth: 3)
-            }
-        }
-    }
-
-    private func targetZonePolygon() -> [CGPoint] {
-        let orderedKeys = ["topLeft", "bottomLeft", "bottomRight", "topRight"]
-        var polygon: [CGPoint] = []
-
-        for key in orderedKeys {
-            guard let point = box.targetZone[key] else { return [] }
-            polygon.append(
-                CGPoint(
-                    x: CGFloat(point.x) / CameraSettings.resolution.width * geo.size.width,
-                    y: (1 - CGFloat(point.y) / CameraSettings.resolution.height) * geo.size.height
-                )
-            )
-        }
-
-        return polygon
+        KeypointsView(geo, normalizedKeypoints, color: targetColor)
     }
 }

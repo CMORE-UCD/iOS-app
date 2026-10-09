@@ -112,6 +112,7 @@ actor FrameProcessor {
                             let result = FrameResult(
                                 presentationTime: timestamp,
                                 boxDetection: await box,
+                                targetDetection: counter.target,
                                 hands: await hands,
                                 blockDetections: await blocks,
                             )
@@ -127,6 +128,7 @@ actor FrameProcessor {
                             async let result = FrameResult(
                                 presentationTime: timestamp,
                                 boxDetection: boxDetector.detect(on: image, handedness: frameHandedness),
+                                targetDetection: counter.target,
                                 blockDetections: blockDetector.detect(on: image)
                             )
                             self.partialResult(await result)
@@ -149,8 +151,6 @@ actor FrameProcessor {
 
     func startCountingBlocks(for handedness: HumanHandPoseObservation.Chirality, box: BoxDetection) {
         activeHandedness = handedness
-        var box = box
-        box.updateTargetZone(in: CameraSettings.resolution, handedness: handedness)
         countingBlocks = true
         blockTrackers = [:]
         lastTrackedPositions = [:]

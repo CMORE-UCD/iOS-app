@@ -15,6 +15,7 @@ struct FrameResult: Codable, Comparable, Sendable {
     var blockTransfered: Int?
     var faces: [FaceObservation]?
     var boxDetection: BoxDetection?
+    var targetDetection: TargetZone?
     var hands: [HumanHandPoseObservation]?
     var blockDetections: [BlockObservation] = []
     

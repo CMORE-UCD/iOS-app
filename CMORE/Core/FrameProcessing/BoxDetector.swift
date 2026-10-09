@@ -18,7 +18,6 @@ nonisolated struct BoxDetection: Codable, Sendable {
     var height: Float = 0
     var objectConf: Float = 0
     var keypoints: [Keypoint] = []
-    var targetZone: [String: SIMD2<Float>] = [:]
     
     func cmPerPixel(in size: CGSize) -> Double {
         let dividerHeight: Double = 10.0 // cm
@@ -78,76 +77,13 @@ nonisolated struct BoxDetection: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case objectConf
         case keypoints
-        case targetZone
     }
-
-//    init(from decoder: Decoder) throws {
-//        let container = try decoder.container(keyedBy: CodingKeys.self)
-//        objectConf = try container.decodeIfPresent(Float.self, forKey: .objectConf) ?? 0
-//        keypoints = try container.decodeIfPresent([Keypoint].self, forKey: .keypoints) ?? []
-//        targetZone = try container.decodeIfPresent([String: SIMD2<Float>].self, forKey: .targetZone) ?? [:]
-//    }
-//
-//    func encode(to encoder: Encoder) throws {
-//        var container = encoder.container(keyedBy: CodingKeys.self)
-//        try container.encode(objectConf, forKey: .objectConf)
-//        try container.encode(keypoints, forKey: .keypoints)
-//        try container.encode(targetZone, forKey: .targetZone)
-//    }
 
     private let keypointNames: [String] = ["Front top left", "Front bottom left", "Front top middle", "Front bottom middle", "Front top right", "Front bottom right", "Back divider top", "Front divider top", "Back top left", "Back top right"]
 
     subscript(name: String) -> Keypoint {
         let idx = keypointNames.firstIndex(of: name)!
         return keypoints[idx]
-    }
-
-    /// Selects the hand's target-side half of the trapezoid.
-    /// Defaults to the right side, which is the app's standard target side.
-    mutating func updateTargetZone(in size: CGSize, handedness: HumanHandPoseObservation.Chirality = .right) {
-        guard keypoints.count > 9 else {
-            targetZone = [:]
-            return
-        }
-
-        let topLeft = pixelPosition(of: "Back top left", in: size)
-        let topRight = pixelPosition(of: "Back top right", in: size)
-        let bottomLeft = pixelPosition(of: "Front top left", in: size)
-        let bottomRight = pixelPosition(of: "Front top right", in: size)
-        let split = interpolate(topLeft, topRight, atX: pixelPosition(of: "Back divider top", in: size).x)
-
-        switch handedness {
-        case .left:
-            targetZone = [
-                "topLeft": topLeft,
-                "bottomLeft": bottomLeft,
-                "topRight": split,
-                "bottomRight": pixelPosition(of: "Front top middle", in: size)
-            ]
-        case .right:
-            targetZone = [
-                "topLeft": split,
-                "bottomLeft": pixelPosition(of: "Front top middle", in: size),
-                "topRight": topRight,
-                "bottomRight": bottomRight
-            ]
-        @unknown default:
-            targetZone = [
-                "topLeft": split,
-                "bottomLeft": pixelPosition(of: "Front top middle", in: size),
-                "topRight": topRight,
-                "bottomRight": bottomRight
-            ]
-        }
-    }
-
-    private func interpolate(_ start: SIMD2<Float>, _ end: SIMD2<Float>, atX x: Float) -> SIMD2<Float> {
-        let dx = end.x - start.x
-        guard abs(dx) > .leastNormalMagnitude else {
-            return SIMD2<Float>(x: x, y: (start.y + end.y) / 2)
-        }
-        let t = (x - start.x) / dx
-        return SIMD2<Float>(x: x, y: start.y + t * (end.y - start.y))
     }
 
     /// Denormalizes a named keypoint into pixel coordinates for the given image size.
@@ -250,7 +186,6 @@ struct BoxDetector {
                 keypoints.append(Keypoint(confidence: conf, position: normalized))
             }
             detection.keypoints = keypoints
-            detection.updateTargetZone(in: originalImageSize, handedness: handedness)
             allDetections.append(detection)
         }
 
