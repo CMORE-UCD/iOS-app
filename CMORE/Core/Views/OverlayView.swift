@@ -30,7 +30,7 @@ struct OverlayView: View {
             BoxView(geometry, boxDetection)
         }
 
-        if let target = overlay.targetDetection {
+        if let targetDetection = overlay.targetDetection {
             TargetZoneView(geometry, targetDetection)
         }
         

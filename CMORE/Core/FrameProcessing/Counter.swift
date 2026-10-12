@@ -38,14 +38,14 @@ struct Counter {
         self.blockCounts = blockCounts
         self.box = box
         self.results = results
-        self.target = TargetZone(handedness, box)
+        self.target.updateTargetZone(box: box, handedness: handedness)
     }
     
     mutating func update(with detection: FrameResult) -> FrameResult {
         dprint("Counter: updating counter!")
         if detection.boxDetection != nil {
             box = detection.boxDetection!
-            target.updateTargetZone(box)
+            target.updateTargetZone(box: box, handedness: handedness)
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
         state = state.transition(by: hands, box, detection.blockDetections)
@@ -60,6 +60,7 @@ struct Counter {
             state: state,
             blockTransfered: blockCounts,
             boxDetection: box,
+            targetDetection: target,
             hands: detection.hands,
             blockDetections: detection.blockDetections
         )
@@ -168,9 +169,11 @@ struct Counter {
         for index in polygon.indices {
             let start = polygon[index]
             let end = polygon[(index + 1) % polygon.count]
-            let edge = end - start
-            let offset = point - start
-            let cross = edge.x * offset.y - edge.y * offset.x
+            let edgeX = end.x - start.x
+            let edgeY = end.y - start.y
+            let offsetX = point.x - start.x
+            let offsetY = point.y - start.y
+            let cross = edgeX * offsetY - edgeY * offsetX
 
             if abs(cross) < 0.001,
                point.x >= min(start.x, end.x), point.x <= max(start.x, end.x),
