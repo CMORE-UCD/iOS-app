@@ -95,7 +95,6 @@ struct Counter {
     }
 
     private mutating func updateBlockCounts() {
-        var countChanged = false
         dprint("Counter: \(blockCounts) valid blocks")
         for (id, history) in targetBlockRegistry {
             guard !activeCountingState,
@@ -106,7 +105,6 @@ struct Counter {
             countedIDs.insert(id)
             activeCountingState = true
             crossedBack = false
-            countChanged = true
         }
     }
 
