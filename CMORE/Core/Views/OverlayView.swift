@@ -28,10 +28,7 @@ struct OverlayView: View {
         
         if let boxDetection = overlay.boxDetection {
             BoxView(geometry, boxDetection)
-        }
-
-        if let targetDetection = overlay.targetDetection {
-            TargetZoneView(geometry, targetDetection)
+            TargetZoneView(geometry, boxDetection, handedness!)
         }
         
         if let hands = overlay.hands {
@@ -99,14 +96,12 @@ struct BoxView: View {
 
 struct TargetZoneView: View {
     let geo: GeometryProxy
-    let target: TargetZone
     let normalizedKeypoints: [NormalizedPoint]
     let targetColor: Color = .yellow
     
-    init(_ geo: GeometryProxy, _ target: TargetZone) {
+    init(_ geo: GeometryProxy, _ box: BoxDetection, _ handedness: HumanHandPoseObservation.Chirality) {
         self.geo = geo
-        self.target = target
-        self.normalizedKeypoints = target.targetpoints.map { $0.location }
+        self.normalizedKeypoints = box.getTargetZone(handedness: handedness)
     }
     
     var body: some View {

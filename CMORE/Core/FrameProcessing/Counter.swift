@@ -13,16 +13,18 @@ struct Counter {
     var state: BlockCountingState
     var blockCounts: Int
     var box: BoxDetection
-    var target: TargetZone
     var results: [FrameResult]
-
-    var movementThreshold: Double = 0.25
-    var activeCountingState = false
+    
+    /// if we have identified a valid block crossing, we are actively counting it
+    /// and should not consider any further blocks until the next attempt
+    var activeCountingState = false 
     var previousFrameState: BlockCountingState?
+
+    /// tracks when we have ended the previous attempt and started a new one 
+    /// by crossing from the target side, to non-target side, and 'crossed back' to target side
     var crossedBack = false
     var countedIDs = Set<UUID>()
     var currentTargetIDs = Set<UUID>()
-    var coordsLastBlock: CGRect?
 
     private var targetBlockRegistry: [UUID: [CGRect]] = [:]
 
@@ -38,14 +40,12 @@ struct Counter {
         self.blockCounts = blockCounts
         self.box = box
         self.results = results
-        self.target.updateTargetZone(box: box, handedness: handedness)
     }
     
     mutating func update(with detection: FrameResult) -> FrameResult {
         dprint("Counter: updating counter!")
         if detection.boxDetection != nil {
             box = detection.boxDetection!
-            target.updateTargetZone(box: box, handedness: handedness)
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
         state = state.transition(by: hands, box, detection.blockDetections)
@@ -60,7 +60,6 @@ struct Counter {
             state: state,
             blockTransfered: blockCounts,
             boxDetection: box,
-            targetDetection: target,
             hands: detection.hands,
             blockDetections: detection.blockDetections
         )
@@ -68,6 +67,8 @@ struct Counter {
         return result
     }
 
+    /// adds all currently tracked block ids in the target to list, 
+    /// then updates the position history for all block ids 
     private mutating func updateCurrentBlocksInTarget(_ blocks: [BlockObservation]) {
         for block in blocks {
             guard let id = block.id,
@@ -82,6 +83,8 @@ struct Counter {
         dprint("Counter: \(currentTargetIDs.count) block ids in target")
     }
 
+    /// identifies stale block ids: no longer tracked in target because its outside or due to 
+    /// tracking failure, sets stale block positions to 0 so it goes out of the bounds required for "hasMovement"
     private mutating func updatePreviousBlocksInTarget() {
         for id in Array(targetBlockRegistry.keys) where !currentTargetIDs.contains(id) {
             var history = targetBlockRegistry[id, default: []]
@@ -101,14 +104,9 @@ struct Counter {
     
             blockCounts += 1
             countedIDs.insert(id)
-            coordsLastBlock = history.last
             activeCountingState = true
             crossedBack = false
             countChanged = true
-        }
-
-        if !countChanged {
-            coordsLastBlock = nil
         }
     }
 
@@ -127,7 +125,7 @@ struct Counter {
         let lastY = Double(last.midY)
         let displacement = hypot(lastX - firstX, lastY - firstY)
         let relativeDisplacement = displacement / referenceSize
-        return relativeDisplacement >= movementThreshold && relativeDisplacement <= 3
+        return relativeDisplacement >= FrameProcessingThresholds.movementThreshold && relativeDisplacement <= 3
     }
 
     private mutating func resetCountingState(for frameState: BlockCountingState) {
@@ -143,9 +141,7 @@ struct Counter {
     }
 
     private func blockIsInTargetZone(_ rect: NormalizedRect) -> Bool {
-        let targetKeys = ["topLeft", "topRight", "bottomRight", "bottomLeft"]
-
-        let polygon = targetKeys.compactMap { target[$0].location }
+        let target = box.getTargetZone(handedness: handedness)
 
         let x = rect.origin.x
         let y = rect.origin.y
@@ -159,16 +155,16 @@ struct Counter {
             NormalizedPoint(x: x + width, y: y + height)
         ]
 
-        return corners.contains { pointInPolygon($0, polygon) }
+        return corners.contains { pointInTarget($0, target) }
     }
 
-    private func pointInPolygon(_ point: NormalizedPoint, _ polygon: [NormalizedPoint]) -> Bool {
-        guard polygon.count >= 3 else { return false }
+    private func pointInTarget(_ point: NormalizedPoint, _ target: [NormalizedPoint]) -> Bool {
+        guard target.count >= 3 else { return false }
         var isInside = false
 
-        for index in polygon.indices {
-            let start = polygon[index]
-            let end = polygon[(index + 1) % polygon.count]
+        for index in target.indices {
+            let start = target[index]
+            let end = target[(index + 1) % target.count]
             let edgeX = end.x - start.x
             let edgeY = end.y - start.y
             let offsetX = point.x - start.x

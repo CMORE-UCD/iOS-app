@@ -104,6 +104,12 @@ nonisolated struct BoxDetection: Codable, Sendable {
             return simd_mix(left.y, right.y, t)
         }
     }
+    
+    // calculate targetzone / make accessible through here
+    func getTargetZone(handedness: HumanHandPoseObservation.Chirality) -> [NormalizedPoint] {
+        let target = TargetZone(box: self, handedness: handedness)
+        return [target.topLeft, target.topRight, target.bottomRight, target.bottomLeft]
+    }
 }
 
 struct Keypoint: Codable {

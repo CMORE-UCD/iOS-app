@@ -37,4 +37,7 @@ nonisolated enum FrameProcessingThresholds {
     
     /// Maximum frames look back for tracked blocks
     static let trackedBlockLookBack: Int = 6
+    
+    /// Minimum percentage of movement for a block to be counted as a valid crossing
+    static let movementThreshold: Double = 0.25
 }

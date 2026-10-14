@@ -6,32 +6,13 @@
 //
 import Vision
 
-nonisolated struct TargetZone: Codable, Sendable {
-    var targetpoints: [Targetpoint] = []
+nonisolated struct TargetZone: Codable, Sendable { // check codable interface for required methods
+    var topLeft: NormalizedPoint = NormalizedPoint(x: 0, y: 0)
+    var topRight: NormalizedPoint = NormalizedPoint(x: 0, y: 0)
+    var bottomRight: NormalizedPoint = NormalizedPoint(x: 0, y: 0)
+    var bottomLeft: NormalizedPoint = NormalizedPoint(x: 0, y: 0)
     
-    enum CodingKeys: String, CodingKey {
-        case targetpoints
-    }
-
-    private let targetpointNames: [String] = ["topLeft", "topRight", "bottomRight", "bottomLeft"]
-
-    subscript(name: String) -> Targetpoint {
-        get {
-            let idx = targetpointNames.firstIndex(of: name)!
-            return targetpoints[idx]
-        }
-        set {
-            let idx = targetpointNames.firstIndex(of: name)!
-            targetpoints[idx] = newValue
-        }
-    }
-
-    mutating func updateTargetZone(box: BoxDetection, handedness: HumanHandPoseObservation.Chirality) {
-        if targetpoints.isEmpty {
-            let emptyPoint = NormalizedPoint(x: 0, y: 0)
-            targetpoints = (0..<4).map { _ in Targetpoint(position: emptyPoint) }
-        }
-
+    init(box: BoxDetection, handedness: HumanHandPoseObservation.Chirality) {
         let topLeft = box["Back top left"].location
         let topRight = box["Back top right"].location
         let bottomLeft = box["Front top left"].location
@@ -40,24 +21,16 @@ nonisolated struct TargetZone: Codable, Sendable {
         let split = calculateSplit(box: box, topLeft: topLeft, topRight: topRight)
         
         if handedness == .left {
-            self["topLeft"].location = topLeft
-            self["bottomLeft"].location = bottomLeft
-            self["topRight"].location = split
-            self["bottomRight"].location = boxFrontMiddle
+            self.topLeft = topLeft
+            self.bottomLeft = bottomLeft
+            self.topRight = split
+            self.bottomRight = boxFrontMiddle
         } else { // defaults to handedness right
-            self["topLeft"].location = topLeft
-            self["bottomLeft"].location = boxFrontMiddle
-            self["topRight"].location = split
-            self["bottomRight"].location = bottomRight
+            self.topLeft = split
+            self.bottomLeft = boxFrontMiddle
+            self.topRight = topRight
+            self.bottomRight = bottomRight
         }
-    }
-}
-
-struct Targetpoint: Codable {
-    var location: NormalizedPoint
-
-    init(position: NormalizedPoint) {
-        self.location = position
     }
 }
 
