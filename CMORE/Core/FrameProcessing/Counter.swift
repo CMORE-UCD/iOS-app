@@ -23,10 +23,7 @@ struct Counter {
     /// tracks when we have ended the previous attempt and started a new one 
     /// by crossing from the target side, to non-target side, and 'crossed back' to target side
     var crossedBack = false
-    var countedIDs = Set<UUID>()
-    var currentTargetIDs = Set<UUID>()
-
-    private var targetBlockRegistry: [UUID: [CGRect]] = [:]
+    private var targetBlockRegistry = TargetBlockRegistry()
 
     init(
         handedness: HumanHandPoseObservation.Chirality,
@@ -42,17 +39,23 @@ struct Counter {
         self.results = results
     }
     
-    mutating func update(with detection: FrameResult) -> FrameResult {
+    /// All geometry (target zone, block positions) is done in pixel space for `resolution`,
+    /// matching `BlockCountingState.transition` and the `BoxDetection` line helpers.
+    mutating func update(with detection: FrameResult, in resolution: CGSize = CameraSettings.resolution) -> FrameResult {
         dprint("Counter: updating counter!")
         if detection.boxDetection != nil {
             box = detection.boxDetection!
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
-        state = state.transition(by: hands, box, detection.blockDetections)
+        state = state.transition(by: hands, box, detection.blockDetections, in: resolution)
 
-        updateCurrentBlocksInTarget(detection.blockDetections)
-        updatePreviousBlocksInTarget()
-        updateBlockCounts()
+        let moved = targetBlockRegistry.hasMovement(blocksInTarget(detection.blockDetections, in: resolution))
+        if moved && !activeCountingState {
+            blockCounts += 1
+            activeCountingState = true
+            crossedBack = false
+        }
+        dprint("Counter: \(blockCounts) valid blocks")
         resetCountingState(for: state)
 
         let result = FrameResult(
@@ -67,63 +70,20 @@ struct Counter {
         return result
     }
 
-    /// adds all currently tracked block ids in the target to list, 
-    /// then updates the position history for all block ids 
-    private mutating func updateCurrentBlocksInTarget(_ blocks: [BlockObservation]) {
+    /// This frame's tracked blocks that are inside the target zone, keyed by id (pixel space).
+    private func blocksInTarget(_ blocks: [BlockObservation], in resolution: CGSize) -> [UUID: CGRect] {
+        let zone = box.targetZone(handedness: handedness)
+        var inTarget: [UUID: CGRect] = [:]
+
         for block in blocks {
-            guard let id = block.id,
-                  blockIsInTargetZone(block.boundingBox) else { continue }
-
-            currentTargetIDs.insert(id)
-            var history = targetBlockRegistry[id, default: []]
-            history.append(block.boundingBox.cgRect)
-            targetBlockRegistry[id] = Array(history.suffix(5))
+            let rect = block.boundingBox.toImageCoordinates(resolution)
+            guard let id = block.id, zone.inside(rect, in: resolution) else { continue }
+            inTarget[id] = rect
         }
+
         dprint("Counter: \(blocks.count) blocks detected")
-        dprint("Counter: \(currentTargetIDs.count) block ids in target")
-    }
-
-    /// identifies stale block ids: no longer tracked in target because its outside or due to 
-    /// tracking failure, sets stale block positions to 0 so it goes out of the bounds required for "hasMovement"
-    private mutating func updatePreviousBlocksInTarget() {
-        for id in Array(targetBlockRegistry.keys) where !currentTargetIDs.contains(id) {
-            var history = targetBlockRegistry[id, default: []]
-            history.append(.zero)
-            targetBlockRegistry[id] = Array(history.suffix(5))
-        }
-        currentTargetIDs.removeAll()
-    }
-
-    private mutating func updateBlockCounts() {
-        dprint("Counter: \(blockCounts) valid blocks")
-        for (id, history) in targetBlockRegistry {
-            guard !activeCountingState,
-                  !countedIDs.contains(id),
-                  hasMovement(in: history) else { continue }
-    
-            blockCounts += 1
-            countedIDs.insert(id)
-            activeCountingState = true
-            crossedBack = false
-        }
-    }
-
-    private func hasMovement(in history: [CGRect]) -> Bool {
-        guard history.count >= 2 else { return false }
-
-        let meanWidth = history.reduce(0.0) { $0 + Double($1.width) } / Double(history.count)
-        let meanHeight = history.reduce(0.0) { $0 + Double($1.height) } / Double(history.count)
-        let referenceSize = max(meanWidth, meanHeight)
-        guard referenceSize > 0 else { return false }
-
-        guard let first = history.first, let last = history.last else { return false }
-        let firstX = Double(first.midX)
-        let firstY = Double(first.midY)
-        let lastX = Double(last.midX)
-        let lastY = Double(last.midY)
-        let displacement = hypot(lastX - firstX, lastY - firstY)
-        let relativeDisplacement = displacement / referenceSize
-        return relativeDisplacement >= FrameProcessingThresholds.movementThreshold && relativeDisplacement <= 3
+        dprint("Counter: \(inTarget.count) block ids in target")
+        return inTarget
     }
 
     private mutating func resetCountingState(for frameState: BlockCountingState) {
@@ -137,53 +97,73 @@ struct Counter {
 
         previousFrameState = frameState
     }
+}
 
-    private func blockIsInTargetZone(_ rect: NormalizedRect) -> Bool {
-        let target = box.getTargetZone(handedness: handedness)
+/// Short position history of the blocks in the target zone, used to decide when a block has
+/// moved enough to be counted. Each block can only be reported once.
+struct TargetBlockRegistry {
+    /// Number of frames of history kept per block.
+    let historyLength: Int
 
-        let x = rect.origin.x
-        let y = rect.origin.y
-        let width = rect.width
-        let height = rect.height
+    /// Last `historyLength` boxes (pixel space) per block. `nil` marks a frame where the
+    /// block wasn't seen in the zone, so short gaps don't erase its history.
+    private var history: [UUID: [CGRect?]] = [:]
 
-        let corners = [
-            NormalizedPoint(x: x,         y: y),
-            NormalizedPoint(x: x + width, y: y),
-            NormalizedPoint(x: x,         y: y + height),
-            NormalizedPoint(x: x + width, y: y + height)
-        ]
+    /// Blocks already reported as moved; never reported again.
+    private var countedIDs = Set<UUID>()
 
-        return corners.contains { pointInTarget($0, target) }
+    init(historyLength: Int = FrameProcessingThresholds.blockHistoryLength) {
+        precondition(historyLength >= 2, "Movement needs at least two frames of history")
+        self.historyLength = historyLength
     }
 
-    private func pointInTarget(_ point: NormalizedPoint, _ target: [NormalizedPoint]) -> Bool {
-        guard target.count >= 3 else { return false }
-        var isInside = false
+    /// Records this frame's blocks in the target zone, then returns true if a not-yet-counted block
+    /// has moved enough. That block is marked counted, so it's never reported again.
+    /// Call once per frame, even with no blocks, so unseen blocks age out.
+    mutating func hasMovement(_ blocksInTarget: [UUID: CGRect]) -> Bool {
+        record(blocksInTarget)
 
-        for index in target.indices {
-            let start = target[index]
-            let end = target[(index + 1) % target.count]
-            let edgeX = end.x - start.x
-            let edgeY = end.y - start.y
-            let offsetX = point.x - start.x
-            let offsetY = point.y - start.y
-            let cross = edgeX * offsetY - edgeY * offsetX
+        guard let id = history.first(where: { id, boxes in
+            !countedIDs.contains(id) && Self.moved(boxes)
+        })?.key else { return false }
 
-            if abs(cross) < 0.001,
-               point.x >= min(start.x, end.x), point.x <= max(start.x, end.x),
-               point.y >= min(start.y, end.y), point.y <= max(start.y, end.y) {
-                return true
-            }
+        countedIDs.insert(id)
+        return true
+    }
 
-            let crossesEdge = (start.y > point.y) != (end.y > point.y)
-            if crossesEdge {
-                let intersectionX = start.x + (point.y - start.y) * (end.x - start.x) / (end.y - start.y)
-                if point.x < intersectionX {
-                    isInside.toggle()
-                }
+    /// Appends this frame's box for every block seen, and `nil` for every block not seen.
+    /// A block unseen for the whole window (all `nil`) is dropped.
+    private mutating func record(_ blocksInTarget: [UUID: CGRect]) {
+        for id in Set(history.keys).union(blocksInTarget.keys) {
+            // Modified in place through the dictionary, so no copy. At most one entry over the
+            // limit, so a single removeFirst (shifting at most `historyLength` items) trims it.
+            history[id, default: []].append(blocksInTarget[id])
+            if history[id]!.count > historyLength {
+                history[id]!.removeFirst()
             }
         }
+        history = history.filter { $0.value.contains { $0 != nil } }
+    }
 
-        return isInside
+    /// True if the block is seen this frame and moved between `movementThreshold` and
+    /// `maxMovement` times its size, measured from its oldest to its newest real box.
+    private static func moved(_ boxes: [CGRect?]) -> Bool {
+        // Only count a block while it's in the zone this frame.
+        // (`boxes.last` is a double optional, so unwrap it before checking the entry itself.)
+        guard let newest = boxes.last, newest != nil else { return false }
+
+        // Gaps (nil) are skipped: movement is measured between the oldest and newest real boxes.
+        let seen = boxes.compactMap { $0 }
+        guard seen.count >= 2, let first = seen.first, let last = seen.last else { return false }
+
+        let meanWidth = seen.reduce(0.0) { $0 + Double($1.width) } / Double(seen.count)
+        let meanHeight = seen.reduce(0.0) { $0 + Double($1.height) } / Double(seen.count)
+        let referenceSize = max(meanWidth, meanHeight)
+        guard referenceSize > 0 else { return false }
+
+        let displacement = hypot(Double(last.midX - first.midX), Double(last.midY - first.midY))
+        let relativeDisplacement = displacement / referenceSize
+        return relativeDisplacement >= FrameProcessingThresholds.movementThreshold
+            && relativeDisplacement <= FrameProcessingThresholds.maxMovement
     }
 }

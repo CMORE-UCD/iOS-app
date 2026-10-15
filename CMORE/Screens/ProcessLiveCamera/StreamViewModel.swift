@@ -407,17 +407,17 @@ class StreamViewModel: ObservableObject {
         let scale = Double(LiveUIConstants.scaleFactor)
         func scaled(_ v: CGFloat) -> Double { 0.5 + (Double(v) - 0.5) * scale }
 
-        let checks: [(String, Double, Double)] = [
-            ("Back top left",      scaled(LiveUIConstants.backLeftX),         1 - scaled(LiveUIConstants.backRimY)),
-            ("Back top right",     scaled(LiveUIConstants.backRightX),        1 - scaled(LiveUIConstants.backRimY)),
-            ("Front top left",     scaled(LiveUIConstants.frontTopLeftX),     1 - scaled(LiveUIConstants.frontRimY)),
-            ("Front top right",    scaled(LiveUIConstants.frontTopRightX),    1 - scaled(LiveUIConstants.frontRimY)),
-            ("Front bottom left",  scaled(LiveUIConstants.frontBottomLeftX),  1 - scaled(LiveUIConstants.bottomY)),
-            ("Front bottom right", scaled(LiveUIConstants.frontBottomRightX), 1 - scaled(LiveUIConstants.bottomY)),
+        let checks: [(Keypoint, Double, Double)] = [
+            (box.backTopLeft,      scaled(LiveUIConstants.backLeftX),         1 - scaled(LiveUIConstants.backRimY)),
+            (box.backTopRight,     scaled(LiveUIConstants.backRightX),        1 - scaled(LiveUIConstants.backRimY)),
+            (box.frontTopLeft,     scaled(LiveUIConstants.frontTopLeftX),     1 - scaled(LiveUIConstants.frontRimY)),
+            (box.frontTopRight,    scaled(LiveUIConstants.frontTopRightX),    1 - scaled(LiveUIConstants.frontRimY)),
+            (box.frontBottomLeft,  scaled(LiveUIConstants.frontBottomLeftX),  1 - scaled(LiveUIConstants.bottomY)),
+            (box.frontBottomRight, scaled(LiveUIConstants.frontBottomRightX), 1 - scaled(LiveUIConstants.bottomY)),
         ]
 
-        return checks.allSatisfy { name, gx, gy in
-            let loc = box[name].location
+        return checks.allSatisfy { keypoint, gx, gy in
+            let loc = keypoint.location
             let dx = Double(loc.x) - gx
             let dy = Double(loc.y) - gy
             return (dx * dx + dy * dy).squareRoot() < LiveUIConstants.offTolerant

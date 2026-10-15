@@ -28,7 +28,8 @@ struct BoxGeometryTests {
 
     @Test("toImageCoordinates matches manual x * width, y * height")
     func toImageCoordinatesMatchesManualScaling() {
-        for (x, y) in [(0.0, 0.0), (1.0, 1.0), (0.25, 0.75), (-0.1, 1.2)] {
+        let points: [(CGFloat, CGFloat)] = [(0, 0), (1, 1), (0.25, 0.75), (-0.1, 1.2)]
+        for (x, y) in points {
             let p = NormalizedPoint(x: x, y: y).toImageCoordinates(size)
             #expect(p.x == x * size.width)
             #expect(p.y == y * size.height)

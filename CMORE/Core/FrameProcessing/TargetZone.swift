@@ -16,14 +16,17 @@ nonisolated struct TargetZone: Codable, Sendable {
 }
 
 extension TargetZone {
-    /// How close (in px) a point may be to an edge, on the outside, and still count as inside.
-    static let edgeTolerance: CGFloat = 1
+    /// The four corners in order (TL → TR → BR → BL).
+    var corners: [Keypoint] {
+        [topLeft, topRight, bottomRight, bottomLeft]
+    }
 
-    /// True if any corner of `rect` is inside the zone (or within `edgeTolerance` of its edges).
+    /// True if any corner of `rect` is inside the zone (or within
+    /// `FrameProcessingThresholds.targetZoneEdgeTolerance` px of its edges).
     /// - Parameters:
     ///   - rect: Block bounding box in pixel space for `size`.
     ///   - size: Image size used to convert the zone's normalized corners to pixels.
-    ///           Required because `edgeTolerance` is measured in pixels.
+    ///           Required because the edge tolerance is measured in pixels.
     func inside(_ rect: CGRect, in size: CGSize) -> Bool {
         let tl = topLeft.location.toImageCoordinates(size)
         let tr = topRight.location.toImageCoordinates(size)
@@ -50,8 +53,8 @@ extension TargetZone {
             // all four edges. Which side counts as "inside" (+ or -) depends on whether the
             // corners run clockwise or counterclockwise. That flips between y-up (Vision) and
             // y-down (screen) coordinates, so accept either, as long as all four agree.
-            // The tolerance lets points just outside an edge (by < edgeTolerance px) still pass.
-            let tolerance = Self.edgeTolerance
+            // The tolerance lets points just outside an edge still pass.
+            let tolerance = FrameProcessingThresholds.targetZoneEdgeTolerance
             return distances.allSatisfy { $0 >= -tolerance }
                 || distances.allSatisfy { $0 <= tolerance }
         }

@@ -101,7 +101,7 @@ struct TargetZoneView: View {
     
     init(_ geo: GeometryProxy, _ box: BoxDetection, _ handedness: HumanHandPoseObservation.Chirality) {
         self.geo = geo
-        self.normalizedKeypoints = box.getTargetZone(handedness: handedness)
+        self.normalizedKeypoints = box.targetZone(handedness: handedness).corners.map { $0.location }
     }
     
     var body: some View {

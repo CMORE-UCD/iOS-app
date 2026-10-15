@@ -30,6 +30,12 @@ nonisolated struct BoxDetection: Codable, Sendable {
     let backTopLeft: Keypoint
     let backTopRight: Keypoint
 
+    /// All keypoints, in the order the model outputs them.
+    var keypoints: [Keypoint] {
+        [frontTopLeft, frontBottomLeft, frontTopMiddle, frontBottomMiddle, frontTopRight,
+         frontBottomRight, backDividerTop, frontDividerTop, backTopLeft, backTopRight]
+    }
+
     func cmPerPixel(in size: CGSize) -> Double {
         let dividerHeight: Double = 10.0 // cm
         let top = point(frontDividerTop, in: size)
@@ -82,21 +88,6 @@ nonisolated struct BoxDetection: Codable, Sendable {
             // 3. Interpolate
             return Float(start.x + (end.x - start.x) * t)
         }
-    }
-
-    // Control which properties get saved
-    enum CodingKeys: String, CodingKey {
-        case objectConf
-        case frontTopLeft
-        case frontBottomLeft
-        case frontTopMiddle
-        case frontBottomMiddle
-        case frontTopRight
-        case frontBottomRight
-        case backDividerTop
-        case frontDividerTop
-        case backTopLeft
-        case backTopRight
     }
 
     /// Front-top edge's y for a given x. Used to gate "is this hand inside the counting region?".
@@ -199,20 +190,12 @@ struct BoxDetector {
         
         // Process each anchor
         for anchorIdx in 0..<numAnchors {
-            var detection = BoxDetection()
-            
-            // Extract bounding box info (first 5 channels)
-            detection.centerX = shapedArray[scalarAt: [0, 0, anchorIdx]]
-            detection.centerY = shapedArray[scalarAt: [0, 1, anchorIdx]]
-            detection.width = shapedArray[scalarAt: [0, 2, anchorIdx]]
-            detection.height = shapedArray[scalarAt: [0, 3, anchorIdx]]
-            detection.objectConf = shapedArray[scalarAt: [0, 4, anchorIdx]]
-            
-            // Skip low confidence detections
-            if detection.objectConf < objectConfThreshold {
+            // Skip low confidence detections (channel 4)
+            let objectConf = shapedArray[scalarAt: [0, 4, anchorIdx]]
+            if objectConf < objectConfThreshold {
                 continue
             }
-            
+
             // Extract keypoints (channels 5-34)
             var keypoints: [Keypoint] = []
             for kptIdx in 0..<numKeypoints {
@@ -225,10 +208,28 @@ struct BoxDetector {
                     SIMD2<Float>(x, y),
                     originalImageSize: originalImageSize
                 )
-                keypoints.append(Keypoint(confidence: conf, position: normalized))
+                keypoints.append(Keypoint(confidence: conf, location: normalized))
             }
-            detection.keypoints = keypoints
-            allDetections.append(detection)
+            guard keypoints.count == 10 else { continue }
+
+            // Bounding box info (channels 0-3), keypoints in the order the model outputs them
+            allDetections.append(BoxDetection(
+                centerX: shapedArray[scalarAt: [0, 0, anchorIdx]],
+                centerY: shapedArray[scalarAt: [0, 1, anchorIdx]],
+                width: shapedArray[scalarAt: [0, 2, anchorIdx]],
+                height: shapedArray[scalarAt: [0, 3, anchorIdx]],
+                objectConf: objectConf,
+                frontTopLeft: keypoints[0],
+                frontBottomLeft: keypoints[1],
+                frontTopMiddle: keypoints[2],
+                frontBottomMiddle: keypoints[3],
+                frontTopRight: keypoints[4],
+                frontBottomRight: keypoints[5],
+                backDividerTop: keypoints[6],
+                frontDividerTop: keypoints[7],
+                backTopLeft: keypoints[8],
+                backTopRight: keypoints[9]
+            ))
         }
 
         // Apply Non-Maximum Suppression (operates on centerX/Y/W/H in raw model space)
