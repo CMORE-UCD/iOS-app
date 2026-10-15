@@ -165,19 +165,18 @@ struct BoxDetector {
         self.request = req
     }
 
-    func detect(on image: CIImage, handedness: HumanHandPoseObservation.Chirality = .right) async -> BoxDetection? {
+    func detect(on image: CIImage) async -> BoxDetection? {
         guard let obs = try? await request.perform(on: image) else { return nil }
         guard let shapedArray = (obs as! [CoreMLFeatureValueObservation]).first?
             .featureValue.shapedArrayValue(of: Float.self) else { return nil }
         return BoxDetector.processKeypointOutput(
             shapedArray,
-            originalImageSize: image.extent.size,
-            handedness: handedness
+            originalImageSize: image.extent.size
         )
     }
 
     /// Processes the raw model output to extract keypoints
-    static func processKeypointOutput(_ shapedArray: MLShapedArray<Float>, confThresh objectConfThreshold: Float = 0.2, IOUThreshold: Float = 0.5, originalImageSize: CGSize = CameraSettings.resolution, handedness: HumanHandPoseObservation.Chirality = .right) -> BoxDetection? {
+    static func processKeypointOutput(_ shapedArray: MLShapedArray<Float>, confThresh objectConfThreshold: Float = 0.2, IOUThreshold: Float = 0.5, originalImageSize: CGSize = CameraSettings.resolution) -> BoxDetection? {
         // Following YOLO pose format:
         // Output shape: (1 × 35 × 5376) -> transpose to (1 × 5376 × 35)
         // Format: [x_center, y_center, width, height, class_conf, kpt1_x, kpt1_y, kpt1_conf, ...]
