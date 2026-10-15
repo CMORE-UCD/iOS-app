@@ -12,12 +12,23 @@ import simd
 nonisolated fileprivate let INPUTSIZE = CGSize(width: 640, height: 640)
 
 nonisolated struct BoxDetection: Codable, Sendable {
-    var centerX: Float = 0
-    var centerY: Float = 0
-    var width: Float = 0
-    var height: Float = 0
-    var objectConf: Float = 0
-    var keypoints: [Keypoint] = []
+    let centerX: Float
+    let centerY: Float
+    let width: Float
+    let height: Float
+    let objectConf: Float
+
+    // Keypoints, in the order the model outputs them
+    let frontTopLeft: Keypoint
+    let frontBottomLeft: Keypoint
+    let frontTopMiddle: Keypoint
+    let frontBottomMiddle: Keypoint
+    let frontTopRight: Keypoint
+    let frontBottomRight: Keypoint
+    let backDividerTop: Keypoint
+    let frontDividerTop: Keypoint
+    let backTopLeft: Keypoint
+    let backTopRight: Keypoint
     
     func cmPerPixel(in size: CGSize) -> Double {
         let dividerHeight: Double = 10.0 // cm
@@ -76,14 +87,16 @@ nonisolated struct BoxDetection: Codable, Sendable {
     // Control which properties get saved
     enum CodingKeys: String, CodingKey {
         case objectConf
-        case keypoints
-    }
-
-    private let keypointNames: [String] = ["Front top left", "Front bottom left", "Front top middle", "Front bottom middle", "Front top right", "Front bottom right", "Back divider top", "Front divider top", "Back top left", "Back top right"]
-
-    subscript(name: String) -> Keypoint {
-        let idx = keypointNames.firstIndex(of: name)!
-        return keypoints[idx]
+        case frontTopLeft
+        case frontBottomLeft
+        case frontTopMiddle
+        case frontBottomMiddle
+        case frontTopRight
+        case frontBottomRight
+        case backDividerTop
+        case frontDividerTop
+        case backTopLeft
+        case backTopRight
     }
 
     /// Denormalizes a named keypoint into pixel coordinates for the given image size.
@@ -114,12 +127,7 @@ nonisolated struct BoxDetection: Codable, Sendable {
 
 struct Keypoint: Codable {
     let confidence: Float
-    var location: NormalizedPoint
-
-    init(confidence: Float, position: NormalizedPoint) {
-        self.confidence = confidence
-        self.location = position
-    }
+    let location: NormalizedPoint
 }
 
 // MARK: - BoxDetector
