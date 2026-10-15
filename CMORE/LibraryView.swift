@@ -106,7 +106,6 @@ struct LibraryView: View {
                         showPhotoPicker = true
                     }
                 }
-                Button("Cancel", role: .cancel) {}
             }
             .navigationDestination(isPresented: $navigateToCamera) {
                 CameraContainerView()
@@ -246,7 +245,7 @@ struct CameraContainerView: View {
             .task {
                 await viewModel.startCamera()
             }
-            .navigationBarBackButtonHidden(true)
+            .navigationBarBackButtonHidden(viewModel.hideNavigationBackButton)
             .onAppear {
                 Task { @MainActor in
                     OrientationManager.shared.setOrientation(.landscapeRight)
