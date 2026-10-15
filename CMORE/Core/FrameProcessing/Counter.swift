@@ -137,7 +137,7 @@ struct TargetBlockRegistry {
         for id in Set(history.keys).union(blocksInTarget.keys) {
             // Modified in place through the dictionary, so no copy. At most one entry over the
             // limit, so a single removeFirst (shifting at most `historyLength` items) trims it.
-            history[id, default: []].append(blocksInTarget[id])
+            history[id, default: []].append(blocksInTarget[id] ?? nil)
             if history[id]!.count > historyLength {
                 history[id]!.removeFirst()
             }
