@@ -99,12 +99,6 @@ nonisolated struct BoxDetection: Codable, Sendable {
         case backTopRight
     }
 
-    /// Denormalizes a named keypoint into pixel coordinates for the given image size.
-    func pixelPosition(of name: String, in size: CGSize) -> SIMD2<Float> {
-        let p = self[name].location
-        return SIMD2<Float>(Float(p.x * size.width), Float(p.y * size.height))
-    }
-
     /// Line through the two front-top corners. Returns the line's y in pixel space
     /// for a given x. Used to gate "is this hand inside the counting region?".
     func frontTopLineY(in size: CGSize) -> (Float) -> Float {
@@ -118,10 +112,26 @@ nonisolated struct BoxDetection: Codable, Sendable {
         }
     }
     
-    // calculate targetzone / make accessible through here
-    func getTargetZone(handedness: HumanHandPoseObservation.Chirality) -> [NormalizedPoint] {
-        let target = TargetZone(box: self, handedness: handedness)
-        return [target.topLeft, target.topRight, target.bottomRight, target.bottomLeft]
+    func targetZone(handedness: HumanHandPoseObservation.Chirality) -> TargetZone {
+        // Point on the back top edge directly in line with the back divider top.
+        // Not a model keypoint, so its confidence is the lowest of the three keypoints it's built from.
+        let left = backTopLeft.location
+        let right = backTopRight.location
+        let dx = right.x - left.x
+        let t = abs(dx) > .ulpOfOne ? (backDividerTop.location.x - left.x) / dx : 0
+        let split = Keypoint(
+            confidence: min(backTopLeft.confidence, backTopRight.confidence, backDividerTop.confidence),
+            location: NormalizedPoint(
+                x: left.x + t * (right.x - left.x),
+                y: left.y + t * (right.y - left.y)
+            )
+        )
+
+        if handedness == .left {
+            return TargetZone(topLeft: backTopLeft, topRight: split, bottomRight: frontTopMiddle, bottomLeft: frontTopLeft)
+        } else { // defaults to handedness right
+            return TargetZone(topLeft: split, topRight: backTopRight, bottomRight: frontTopRight, bottomLeft: frontTopMiddle)
+        }
     }
 }
 
