@@ -56,8 +56,9 @@ func isValidHand(hand: HumanHandPoseObservation, above lineY: (Float) -> Float, 
 ///   - joints: Hand joints to test.
 func isAbove(lineY: (Float) -> Float, _ joints: [Joint], in resolution: CGSize = CameraSettings.resolution) -> Bool {
     return joints.allSatisfy { joint in
-        let x = Float(joint.location.x * resolution.width)
-        let y = Float(joint.location.y * resolution.height)
+        let point = joint.location.toImageCoordinates(resolution)
+        let x = Float(point.x)
+        let y = Float(point.y)
         return y > lineY(x)
     }
 }
@@ -69,8 +70,9 @@ func isAbove(lineY: (Float) -> Float, _ joints: [Joint], in resolution: CGSize =
 ///   - joints: Hand joints to test.
 func isCrossed(dividerX: (Float) -> Float, _ joints: [Joint], handedness: HumanHandPoseObservation.Chirality, in resolution: CGSize = CameraSettings.resolution) -> Bool {
     return joints.contains { joint in
-        let x = Float(joint.location.x * resolution.width)
-        let y = Float(joint.location.y * resolution.height)
+        let point = joint.location.toImageCoordinates(resolution)
+        let x = Float(point.x)
+        let y = Float(point.y)
         switch handedness {
             case .left:
                 return x < dividerX(y)
