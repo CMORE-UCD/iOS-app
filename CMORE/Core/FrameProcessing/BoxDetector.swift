@@ -29,25 +29,26 @@ nonisolated struct BoxDetection: Codable, Sendable {
     let frontDividerTop: Keypoint
     let backTopLeft: Keypoint
     let backTopRight: Keypoint
-    
+
     func cmPerPixel(in size: CGSize) -> Double {
         let dividerHeight: Double = 10.0 // cm
-        let keypointHeight = distance( // px
-            pixelPosition(of: "Front divider top", in: size),
-            pixelPosition(of: "Front top middle", in: size)
-        )
+        let top = point(frontDividerTop, in: size)
+        let bottom = point(frontTopMiddle, in: size)
+        let keypointHeight = hypot(top.x - bottom.x, top.y - bottom.y) // px
 
         return dividerHeight / Double(keypointHeight)
     }
 
-    func dividerX(in size: CGSize) -> (Float) -> Float {
-        let frontTopDivider = pixelPosition(of: "Front divider top", in: size)
-        let bottomDivider = pixelPosition(of: "Front top middle", in: size)
-        let backTopDivider = pixelPosition(of: "Back divider top", in: size)
+    /// Divider's x for a given y. Pass `size` for pixel space; omit it for normalized space.
+    func dividerX(in size: CGSize? = nil) -> (Float) -> Float {
+        let frontTopDivider = point(frontDividerTop, in: size)
+        let bottomDivider = point(frontTopMiddle, in: size)
+        let backTopDivider = point(backDividerTop, in: size)
 
-        return { y in
-            let start: SIMD2<Float>
-            let end: SIMD2<Float>
+        return { yFloat in
+            let y = CGFloat(yFloat)
+            let start: CGPoint
+            let end: CGPoint
 
             if y <= frontTopDivider.y {
                 // Case A: Bottom Section
@@ -56,12 +57,12 @@ nonisolated struct BoxDetection: Codable, Sendable {
             }
             else if y >= backTopDivider.y {
                 // Case B: Top Section (Parallel Projection)
-                // Vector Math: Calculate direction (B - A) and add to C
-                // No manual loops needed; SIMD handles the subtraction/addition.
-                let direction = bottomDivider - frontTopDivider
-
+                // Calculate direction (B - A) and add to C
                 start = backTopDivider
-                end = backTopDivider + direction
+                end = CGPoint(
+                    x: backTopDivider.x + (bottomDivider.x - frontTopDivider.x),
+                    y: backTopDivider.y + (bottomDivider.y - frontTopDivider.y)
+                )
             }
             else {
                 // Case C: Middle Section
@@ -74,13 +75,12 @@ nonisolated struct BoxDetection: Codable, Sendable {
             let dy = end.y - start.y
 
             // Safety: Avoid division by zero
-            guard abs(dy) > .leastNormalMagnitude else { return start.x }
+            guard abs(dy) > .leastNormalMagnitude else { return Float(start.x) }
 
             let t = (y - start.y) / dy
 
-            // 3. Built-in Interpolation
-            // simd_mix(a, b, t) is the hardware-optimized version of "a + (b - a) * t"
-            return simd_mix(start.x, end.x, t)
+            // 3. Interpolate
+            return Float(start.x + (end.x - start.x) * t)
         }
     }
 
@@ -99,38 +99,56 @@ nonisolated struct BoxDetection: Codable, Sendable {
         case backTopRight
     }
 
-    /// Line through the two front-top corners. Returns the line's y in pixel space
-    /// for a given x. Used to gate "is this hand inside the counting region?".
-    func frontTopLineY(in size: CGSize) -> (Float) -> Float {
-        let left = pixelPosition(of: "Front top left", in: size)
-        let right = pixelPosition(of: "Front top right", in: size)
-        return { x in
+    /// Front-top edge's y for a given x. Used to gate "is this hand inside the counting region?".
+    /// Pass `size` for pixel space; omit it for normalized space.
+    func frontTopLineY(in size: CGSize? = nil) -> (Float) -> Float {
+        Self.line(from: point(frontTopLeft, in: size), to: point(frontTopRight, in: size))
+    }
+
+    /// Back-top edge's y for a given x. Pass `size` for pixel space; omit it for normalized space.
+    func backTopLineY(in size: CGSize? = nil) -> (Float) -> Float {
+        Self.line(from: point(backTopLeft, in: size), to: point(backTopRight, in: size))
+    }
+
+    /// The keypoint's location in pixels if `size` is given, otherwise as stored (normalized).
+    private func point(_ keypoint: Keypoint, in size: CGSize?) -> CGPoint {
+        guard let size else { return keypoint.location.cgPoint }
+        return keypoint.location.toImageCoordinates(size)
+    }
+
+    /// y on the line through `left` and `right` for a given x. Works in any coordinate space.
+    private static func line(from left: CGPoint, to right: CGPoint) -> (Float) -> Float {
+        { xFloat in
+            let x = CGFloat(xFloat)
             let dx = right.x - left.x
-            guard abs(dx) > .leastNormalMagnitude else { return left.y }
+            guard abs(dx) > .leastNormalMagnitude else { return Float(left.y) }
             let t = (x - left.x) / dx
-            return simd_mix(left.y, right.y, t)
+            return Float(left.y + (right.y - left.y) * t)
         }
     }
-    
+
     func targetZone(handedness: HumanHandPoseObservation.Chirality) -> TargetZone {
-        // Point on the back top edge directly in line with the back divider top.
-        // Not a model keypoint, so its confidence is the lowest of the three keypoints it's built from.
-        let left = backTopLeft.location
-        let right = backTopRight.location
-        let dx = right.x - left.x
-        let t = abs(dx) > .ulpOfOne ? (backDividerTop.location.x - left.x) / dx : 0
-        let split = Keypoint(
-            confidence: min(backTopLeft.confidence, backTopRight.confidence, backDividerTop.confidence),
-            location: NormalizedPoint(
-                x: left.x + t * (right.x - left.x),
-                y: left.y + t * (right.y - left.y)
-            )
+        let x = backDividerTop.location.x
+        let backTopMiddle = Keypoint(
+            confidence: backDividerTop.confidence,
+            location: NormalizedPoint(x: x, y: CGFloat(backTopLineY()(Float(x))))
         )
 
         if handedness == .left {
-            return TargetZone(topLeft: backTopLeft, topRight: split, bottomRight: frontTopMiddle, bottomLeft: frontTopLeft)
+            return TargetZone(
+                topLeft: backTopLeft,
+                topRight: backTopMiddle,
+                bottomRight: frontTopMiddle,
+                bottomLeft: frontTopLeft
+            )
+            
         } else { // defaults to handedness right
-            return TargetZone(topLeft: split, topRight: backTopRight, bottomRight: frontTopRight, bottomLeft: frontTopMiddle)
+            return TargetZone(
+                topLeft: backTopMiddle,
+                topRight: backTopRight,
+                bottomRight: frontTopRight,
+                bottomLeft: frontTopMiddle
+            )
         }
     }
 }
