@@ -14,10 +14,13 @@ struct TargetBlockRegistryTests {
     /// 40x40 px block at x (moving 20 px = 0.5x its size, above `movementThreshold`).
     private func box(_ x: CGFloat) -> CGRect { CGRect(x: x, y: 100, width: 40, height: 40) }
 
-    /// Feeds one frame per entry to a fresh registry and returns `hasMovement` for each frame.
+    /// Feeds one frame per entry to a fresh registry and returns `claimMovedBlock` for each frame.
     private func run(_ frames: [[UUID: CGRect]]) -> [Bool] {
         var registry = TargetBlockRegistry()
-        return frames.map { registry.hasMovement($0) }
+        return frames.map {
+            registry.record($0)
+            return registry.blockMoved()
+        }
     }
 
     @Test func needsTwoFramesAndMovement() {
@@ -40,7 +43,10 @@ struct TargetBlockRegistryTests {
     @Test("Custom history length: gap longer than the window drops history")
     func customHistoryLength() {
         var registry = TargetBlockRegistry(historyLength: 2)
-        let results = [[id: box(100)], [:], [:], [id: box(120)]].map { registry.hasMovement($0) }
+        let results = [[id: box(100)], [:], [:], [id: box(120)]].map {
+            registry.record($0)
+            return registry.blockMoved()
+        }
         #expect(results == [false, false, false, false])
     }
 

@@ -10,57 +10,45 @@ import Vision
 struct Counter {
     let handedness: HumanHandPoseObservation.Chirality
 
-    var state: BlockCountingState
     var blockCounts: Int
     var box: BoxDetection
     var results: [FrameResult]
-    
-    /// if we have identified a valid block crossing, we are actively counting it
-    /// and should not consider any further blocks until the next attempt
-    var activeCountingState = false 
-    var previousFrameState: BlockCountingState?
 
-    /// tracks when we have ended the previous attempt and started a new one 
-    /// by crossing from the target side, to non-target side, and 'crossed back' to target side
-    var crossedBack = false
+    private(set) var state = AttemptState()
     private var targetBlockRegistry = TargetBlockRegistry()
 
     init(
         handedness: HumanHandPoseObservation.Chirality,
-        state: BlockCountingState,
         blockCounts: Int,
         box: BoxDetection,
         results: [FrameResult]
     ) {
         self.handedness = handedness
-        self.state = state
         self.blockCounts = blockCounts
         self.box = box
         self.results = results
     }
     
     /// All geometry (target zone, block positions) is done in pixel space for `resolution`,
-    /// matching `BlockCountingState.transition` and the `BoxDetection` line helpers.
-    mutating func update(with detection: FrameResult, in resolution: CGSize = CameraSettings.resolution) -> FrameResult {
+    /// matching `HandPosition.transition` and the `BoxDetection` line helpers.
+    /// - Parameter onCross: Called when the hand moves onto the crossed side this frame.
+    mutating func update(with detection: FrameResult, in resolution: CGSize = CameraSettings.resolution, onCross: () -> Void = {}) -> FrameResult {
         dprint("Counter: updating counter!")
         if detection.boxDetection != nil {
             box = detection.boxDetection!
         }
         let hands = detection.hands?.filter { $0.chirality == handedness } ?? []
-        state = state.transition(by: hands, box, detection.blockDetections, in: resolution)
+        targetBlockRegistry.record(blocksInTarget(detection.blockDetections, in: resolution))
 
-        let moved = targetBlockRegistry.hasMovement(blocksInTarget(detection.blockDetections, in: resolution))
-        if moved && !activeCountingState {
+        let hand = state.hand.transition(by: hands, box, in: resolution)
+        if state.update(hand: hand, registry: &targetBlockRegistry, onCross: onCross) {
             blockCounts += 1
-            activeCountingState = true
-            crossedBack = false
         }
         dprint("Counter: \(blockCounts) valid blocks")
-        resetCountingState(for: state)
 
         let result = FrameResult(
             presentationTime: detection.presentationTime,
-            state: state,
+            state: state.hand,
             blockTransfered: blockCounts,
             boxDetection: box,
             hands: detection.hands,
@@ -86,17 +74,6 @@ struct Counter {
         return inTarget
     }
 
-    private mutating func resetCountingState(for frameState: BlockCountingState) {
-        if activeCountingState && crossedBack && frameState == .crossed {
-            activeCountingState = false
-        }
-
-        if previousFrameState == .notCrossed && frameState == .crossed {
-            crossedBack = true
-        }
-
-        previousFrameState = frameState
-    }
 }
 
 /// Short position history of the blocks in the target zone, used to decide when a block has
@@ -117,12 +94,9 @@ struct TargetBlockRegistry {
         self.historyLength = historyLength
     }
 
-    /// Records this frame's blocks in the target zone, then returns true if a not-yet-counted block
-    /// has moved enough. That block is marked counted, so it's never reported again.
-    /// Call once per frame, even with no blocks, so unseen blocks age out.
-    mutating func hasMovement(_ blocksInTarget: [UUID: CGRect]) -> Bool {
-        record(blocksInTarget)
-
+    /// Returns true if a not-yet-counted block has moved enough, and marks it counted so it's
+    /// never reported again. Only call when the count will actually be used.
+    mutating func blockMoved() -> Bool {
         guard let id = history.first(where: { id, boxes in
             !countedIDs.contains(id) && Self.moved(boxes)
         })?.key else { return false }
@@ -133,7 +107,8 @@ struct TargetBlockRegistry {
 
     /// Appends this frame's box for every block seen, and `nil` for every block not seen.
     /// A block unseen for the whole window (all `nil`) is dropped.
-    private mutating func record(_ blocksInTarget: [UUID: CGRect]) {
+    /// Call once per frame, even with no blocks, so unseen blocks age out.
+    mutating func record(_ blocksInTarget: [UUID: CGRect]) {
         for id in Set(history.keys).union(blocksInTarget.keys) {
             // Modified in place through the dictionary, so no copy. At most one entry over the
             // limit, so a single removeFirst (shifting at most `historyLength` items) trims it.

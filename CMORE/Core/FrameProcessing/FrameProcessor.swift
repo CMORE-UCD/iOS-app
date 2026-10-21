@@ -153,7 +153,6 @@ actor FrameProcessor {
         lastTrackedPositions = [:]
         counter = Counter(
             handedness: handedness,
-            state: .inital,
             blockCounts: 0,
             box: box,
             results: []
@@ -218,16 +217,10 @@ actor FrameProcessor {
 
     private func processInOrder(_ frame: CIImage, partialResult: FrameResult) async {
         guard let counter else { fatalError("Frame Processor: counter is nil") }
-        let previousState = counter.state
         var updatedResult = partialResult
         
         defer {
-            let result: FrameResult = self.counter!.update(with: updatedResult)
-
-            if previousState != .crossed && result.state == .crossed {
-                onCrossed()
-            }
-
+            let result: FrameResult = self.counter!.update(with: updatedResult, onCross: onCrossed)
             fullResult(result, frame)
         }
 
