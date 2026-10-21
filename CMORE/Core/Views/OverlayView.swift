@@ -28,6 +28,10 @@ struct OverlayView: View {
         
         if let boxDetection = overlay.boxDetection {
             BoxView(geometry, boxDetection)
+            // Imported videos only learn handedness after processing finishes
+            if let handedness {
+                TargetZoneView(geometry, boxDetection, handedness)
+            }
         }
         
         if let hands = overlay.hands {
@@ -90,5 +94,20 @@ struct BoxView: View {
     
     var body: some View {
         KeypointsView(geo, normalizedKeypoints)
+    }
+}
+
+struct TargetZoneView: View {
+    let geo: GeometryProxy
+    let normalizedKeypoints: [NormalizedPoint]
+    let targetColor: Color = .yellow
+    
+    init(_ geo: GeometryProxy, _ box: BoxDetection, _ handedness: HumanHandPoseObservation.Chirality) {
+        self.geo = geo
+        self.normalizedKeypoints = box.targetZone(handedness: handedness).corners.map { $0.location }
+    }
+    
+    var body: some View {
+        KeypointsView(geo, normalizedKeypoints, color: targetColor)
     }
 }

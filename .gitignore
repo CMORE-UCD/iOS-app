@@ -1,5 +1,6 @@
 # User data
 **/xcuserdata/
+*.DS_Store
 
 # Test resources
 CMORETests/TestResources/*
@@ -10,3 +11,6 @@ instruction.md
 
 # docs for LLMs
 docs/
+
+# Per-developer signing settings 
+override.xcconfig

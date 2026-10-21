@@ -37,4 +37,16 @@ nonisolated enum FrameProcessingThresholds {
     
     /// Maximum frames look back for tracked blocks
     static let trackedBlockLookBack: Int = 6
+    
+    /// Minimum percentage of movement for a block to be counted as a valid crossing
+    static let movementThreshold: Double = 0.25
+
+    /// Maximum movement (relative to block size) before it's treated as a tracking jump, not real movement
+    static let maxMovement: Double = 3
+
+    /// Number of recent bounding boxes kept per block in the target zone
+    static let blockHistoryLength: Int = 5
+
+    /// How far (px) outside a target zone edge a point can be and still count as inside
+    static let targetZoneEdgeTolerance: CGFloat = 1
 }

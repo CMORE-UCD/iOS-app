@@ -18,12 +18,21 @@ class StreamViewModel: ObservableObject {
 
     /// Whether to show the save confirmation dialog
     @Published var showSaveConfirmation = false
+    
+    /// Whether to show the start confirmation process
+    @Published var showStartConfirmation = false
 
     /// Signals that the camera screen can dismiss after the pending recording is handled.
     @Published var shouldDismissCamera = false
 
+    /// Controls whether the camera screen hides the navigation back button.
+    @Published var hideNavigationBackButton = false
+
     /// Show the visualization overlay in real-time
     @Published var overlay: FrameResult?
+
+    /// Current block total from the ordered counting pipeline
+    @Published var blockCounts = 0
 
     /// Use to help identify which hand we are looking at
     @Published var handedness: HumanHandPoseObservation.Chirality = .right
@@ -45,20 +54,19 @@ class StreamViewModel: ObservableObject {
 
     // MARK: - Private Properties
 
-    private let cameraManager = CameraManager()
+    private let cameraManager: any CameraManaging
 
     /// The URL of the current video being processed (temporary)
     private var currentVideoURL: URL?
 
-
-    /// Suffix for both saved video and result
-    private var fileNameSuffix: String?
+    /// File names and session name for the current recording
+    private var names: RecordingNames?
 
     /// Timestamp for the start
     private var recordingStartTime: CMTime?
 
     /// The algorithm and ml results for the video
-    private var result: [FrameResult]?
+    private(set) var result: [FrameResult]?
 
     /// Processes each frame through it
     private var frameProcessor: FrameProcessor!
@@ -69,7 +77,8 @@ class StreamViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init() {
+    init(cameraManager: any CameraManaging = CameraManager()) {
+        self.cameraManager = cameraManager
         cameraManager.setup()
 
         self.frameProcessor = FrameProcessor(
@@ -84,6 +93,11 @@ class StreamViewModel: ObservableObject {
                         return // early return
                     }
                     self?.isAligned = self?.isBoxAligned(result.boxDetection) ?? false
+                }
+            },
+            fullResult: { @Sendable [weak self] result, _ in
+                Task { @MainActor in
+                    self?.blockCounts = result.blockTransfered ?? 0
                 }
             }
         )
@@ -123,10 +137,14 @@ class StreamViewModel: ObservableObject {
             countdownTask?.cancel()
             countdownTask = nil
             countdown = nil
+            hideNavigationBackButton = false
         } else if isRecording {
             stopRecording()
         } else {
-            startRecording()
+            if (self.startConditionsMet()) {
+                hideNavigationBackButton = true
+                self.showStartConfirmation = true
+            }
         }
     }
 
@@ -141,29 +159,30 @@ class StreamViewModel: ObservableObject {
         } else {
             handedness = .left
         }
+
+        let selectedHandedness = handedness
+        Task {
+            await frameProcessor.updateHandedness(selectedHandedness)
+        }
     }
 
     /// Saves the recording as a session (video stays in Documents, results written to JSON)
     func saveSession(nameRequest: String? = nil) {
         guard let videoURL = currentVideoURL,
-              let defaultFileNameSuffix = fileNameSuffix,
               let result = result,
               !result.isEmpty,
-              let recordingStartTime = recordingStartTime else {
+              let recordingStartTime = recordingStartTime,
+              let pendingNames = names else {
             print("Stream View Model: missing data for session save")
             return
         }
 
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
 
-        let videoFileName: String
-        if let nameRequest {
-            videoFileName = "\(nameRequest).mov"
-        } else {
-            videoFileName = "CMORE_Recording_\(defaultFileNameSuffix).mov"
-        }
+        // A name chosen at save time overrides whatever was set when recording started
+        let names = nameRequest.map { RecordingNames(customName: $0) } ?? pendingNames
 
-        let finalVideoURL = documentsDir.appendingPathComponent(videoFileName)
+        let finalVideoURL = documentsDir.appendingPathComponent(names.videoFileName)
 
         if finalVideoURL != videoURL {
             do {
@@ -175,14 +194,8 @@ class StreamViewModel: ObservableObject {
         }
 
         // Save results JSON
-        let resultsFileName: String
-        if let nameRequest {
-            resultsFileName = "\(nameRequest).json"
-        } else {
-            resultsFileName = "CMORE_Recording_\(defaultFileNameSuffix).json"
-        }
 
-        let resultsURL = documentsDir.appendingPathComponent(resultsFileName)
+        let resultsURL = documentsDir.appendingPathComponent(names.resultsFileName)
 
         do {
             let data = try JSONEncoder().encode(result.map {
@@ -198,16 +211,13 @@ class StreamViewModel: ObservableObject {
         // Compute block count from results
         let blockCount = result.compactMap(\.blockTransfered).max() ?? 0
 
-        // if not custom, should be empty
-        let sessionName = nameRequest ?? ""
-
         Task {
             do {
                 try await SessionStore.shared.add(
-                    name: sessionName,
+                    name: names.sessionName,
                     blockCount: blockCount,
                     videoFileName: finalVideoURL.lastPathComponent,
-                    resultsFileName: resultsFileName,
+                    resultsFileName: names.resultsFileName,
                     handedness: handedness
                 )
             } catch {
@@ -217,26 +227,30 @@ class StreamViewModel: ObservableObject {
             // Clean up state
             self.currentVideoURL = nil
             self.result = nil
-            self.fileNameSuffix = nil
             self.recordingStartTime = nil
             self.showSaveConfirmation = false
             self.shouldDismissCamera = true
+            self.names = nil
         }
     }
     
+    /// Returns the cleaned-up name to save under, or nil if it's empty or either of its files already exists
     func checkExist(fileName: String) -> String? {
         let trimmed = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        
-        let videoFileName = "\(fileName).mov"
-        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let finalVideoURL = documentsDir.appendingPathComponent(videoFileName)
-        if FileManager.default.fileExists(atPath: finalVideoURL.path) {return nil}
 
         let invalidCharacters = CharacterSet(charactersIn: "/:")
-        return trimmed
+        let sanitized = trimmed
             .components(separatedBy: invalidCharacters)
             .joined(separator: "-")
+
+        // Check the name we will actually save under, for both files it produces
+        let names = RecordingNames(customName: sanitized)
+        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let taken = [names.videoFileName, names.resultsFileName].contains {
+            FileManager.default.fileExists(atPath: documentsDir.appendingPathComponent($0).path)
+        }
+        return taken ? nil : sanitized
     }
 
     /// Discards the pending recording (video file + in-memory results)
@@ -247,8 +261,8 @@ class StreamViewModel: ObservableObject {
 
         currentVideoURL = nil
         result = nil
-        fileNameSuffix = nil
         recordingStartTime = nil
+        names = nil
 
         showSaveConfirmation = false
         shouldDismissCamera = true
@@ -263,28 +277,18 @@ class StreamViewModel: ObservableObject {
             await frameProcessor.startProcessing(stream: stream)
         }
     }
-
-    // MARK: - Private Methods
-    private func playSound(_ soundID: SystemSoundID) {
-        guard !UserDefaults.standard.bool(forKey: "soundMuted") else { return }
-        AudioServicesPlaySystemSound(soundID)
-    }
-
+    
     /// Runs the 3-second countdown then starts video recording
-    private func startRecording() {
-        guard !isRecording && countdown == nil else { return }
-        guard overlay?.boxDetection != nil else {
-            askForBox = true
-            return
-        }
-
+    func startRecording(nameRequest: String? = nil) {
+        self.showStartConfirmation = false
+        dprint("showing countdown")
         countdownTask = Task { @MainActor [weak self] in
             guard let self else { return }
             Task { await self.frameProcessor.warmup() }
             for tick in [3, 2, 1] {
                 guard !Task.isCancelled else { return }
                 self.countdown = tick
-                self.playSound(1104)
+                self.playUnmutableSound("countdown_\(tick).mp3")
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
             guard !Task.isCancelled else {
@@ -292,21 +296,56 @@ class StreamViewModel: ObservableObject {
                 return
             }
             self.countdown = nil
-            self.actuallyStartRecording()
+            self.actuallyStartRecording(nameRequest)
         }
     }
 
-    private func actuallyStartRecording() {
-        self.playSound(1117) // "begin recording" chime
+    // MARK: - Private Methods
+    private func startConditionsMet() -> Bool {
+        guard !isRecording && countdown == nil else { return false }
+        guard overlay?.boxDetection != nil else {
+            askForBox = true
+            return false
+        }
+        
+        return true
+    }
+    
+    private var soundEffect: AVAudioPlayer?
+
+    private func playUnmutableSound(_ soundFileName: String) {
+        let baseName = (soundFileName as NSString).deletingPathExtension
+        let ext = (soundFileName as NSString).pathExtension
+
+        guard let url = Bundle.main.url(forResource: baseName, withExtension: ext, subdirectory: "SoundAssets")
+            ?? Bundle.main.url(forResource: baseName, withExtension: ext)
+        else {
+            dprint("StreamViewModel: missing sound file \(soundFileName)")
+            return
+        }
+
+        do {
+            soundEffect = try AVAudioPlayer(contentsOf: url)
+            soundEffect?.prepareToPlay()
+            soundEffect?.play() 
+            //test
+        } catch {
+            dprint("StreamViewModel: failed to load sound file \(soundFileName): \(error)")
+        }
+    }
+
+    private func actuallyStartRecording(_ nameRequest: String? = nil) {
+        self.playUnmutableSound("beep.mp3") // "begin recording" chime
+        blockCounts = 0
         isRecording = true
         recordingTimeRemaining = maxRecordingSeconds
 
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 
-        let suffix = String(Date().timeIntervalSince1970)
-        let videoFileName = "CMORE_Recording_\(suffix).mov"
-        fileNameSuffix = suffix
-        let outputURL = documentsPath.appendingPathComponent(videoFileName)
+        let names = RecordingNames(customName: nameRequest)
+        self.names = names
+
+        let outputURL = documentsPath.appendingPathComponent(names.videoFileName)
         currentVideoURL = outputURL
 
         cameraManager.startRecording(to: outputURL)
@@ -325,7 +364,7 @@ class StreamViewModel: ObservableObject {
                 self.recordingTimeRemaining = remaining
             }
             if !Task.isCancelled {
-                playSound(1005) // buzzer
+                self.playUnmutableSound("beep.mp3")
                 self.stopRecording()
             }
         }
@@ -357,17 +396,17 @@ class StreamViewModel: ObservableObject {
         let scale = Double(LiveUIConstants.scaleFactor)
         func scaled(_ v: CGFloat) -> Double { 0.5 + (Double(v) - 0.5) * scale }
 
-        let checks: [(String, Double, Double)] = [
-            ("Back top left",      scaled(LiveUIConstants.backLeftX),         1 - scaled(LiveUIConstants.backRimY)),
-            ("Back top right",     scaled(LiveUIConstants.backRightX),        1 - scaled(LiveUIConstants.backRimY)),
-            ("Front top left",     scaled(LiveUIConstants.frontTopLeftX),     1 - scaled(LiveUIConstants.frontRimY)),
-            ("Front top right",    scaled(LiveUIConstants.frontTopRightX),    1 - scaled(LiveUIConstants.frontRimY)),
-            ("Front bottom left",  scaled(LiveUIConstants.frontBottomLeftX),  1 - scaled(LiveUIConstants.bottomY)),
-            ("Front bottom right", scaled(LiveUIConstants.frontBottomRightX), 1 - scaled(LiveUIConstants.bottomY)),
+        let checks: [(Keypoint, Double, Double)] = [
+            (box.backTopLeft,      scaled(LiveUIConstants.backLeftX),         1 - scaled(LiveUIConstants.backRimY)),
+            (box.backTopRight,     scaled(LiveUIConstants.backRightX),        1 - scaled(LiveUIConstants.backRimY)),
+            (box.frontTopLeft,     scaled(LiveUIConstants.frontTopLeftX),     1 - scaled(LiveUIConstants.frontRimY)),
+            (box.frontTopRight,    scaled(LiveUIConstants.frontTopRightX),    1 - scaled(LiveUIConstants.frontRimY)),
+            (box.frontBottomLeft,  scaled(LiveUIConstants.frontBottomLeftX),  1 - scaled(LiveUIConstants.bottomY)),
+            (box.frontBottomRight, scaled(LiveUIConstants.frontBottomRightX), 1 - scaled(LiveUIConstants.bottomY)),
         ]
 
-        return checks.allSatisfy { name, gx, gy in
-            let loc = box[name].location
+        return checks.allSatisfy { keypoint, gx, gy in
+            let loc = keypoint.location
             let dx = Double(loc.x) - gx
             let dy = Double(loc.y) - gy
             return (dx * dx + dy * dy).squareRoot() < LiveUIConstants.offTolerant

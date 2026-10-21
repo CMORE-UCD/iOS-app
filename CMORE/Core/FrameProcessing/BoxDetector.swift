@@ -7,35 +7,54 @@
 import CoreML
 import Vision
 import CoreImage
+import simd
 
 nonisolated fileprivate let INPUTSIZE = CGSize(width: 640, height: 640)
 
 nonisolated struct BoxDetection: Codable, Sendable {
-    var centerX: Float = 0
-    var centerY: Float = 0
-    var width: Float = 0
-    var height: Float = 0
-    var objectConf: Float = 0
-    var keypoints: [Keypoint] = []
-    
+    let centerX: Float
+    let centerY: Float
+    let width: Float
+    let height: Float
+    let objectConf: Float
+
+    // Keypoints, in the order the model outputs them
+    let frontTopLeft: Keypoint
+    let frontBottomLeft: Keypoint
+    let frontTopMiddle: Keypoint
+    let frontBottomMiddle: Keypoint
+    let frontTopRight: Keypoint
+    let frontBottomRight: Keypoint
+    let backDividerTop: Keypoint
+    let frontDividerTop: Keypoint
+    let backTopLeft: Keypoint
+    let backTopRight: Keypoint
+
+    /// All keypoints, in the order the model outputs them.
+    var keypoints: [Keypoint] {
+        [frontTopLeft, frontBottomLeft, frontTopMiddle, frontBottomMiddle, frontTopRight,
+         frontBottomRight, backDividerTop, frontDividerTop, backTopLeft, backTopRight]
+    }
+
     func cmPerPixel(in size: CGSize) -> Double {
         let dividerHeight: Double = 10.0 // cm
-        let keypointHeight = distance( // px
-            pixelPosition(of: "Front divider top", in: size),
-            pixelPosition(of: "Front top middle", in: size)
-        )
+        let top = point(frontDividerTop, in: size)
+        let bottom = point(frontTopMiddle, in: size)
+        let keypointHeight = hypot(top.x - bottom.x, top.y - bottom.y) // px
 
         return dividerHeight / Double(keypointHeight)
     }
 
-    func dividerX(in size: CGSize) -> (Float) -> Float {
-        let frontTopDivider = pixelPosition(of: "Front divider top", in: size)
-        let bottomDivider = pixelPosition(of: "Front top middle", in: size)
-        let backTopDivider = pixelPosition(of: "Back divider top", in: size)
+    /// Divider's x for a given y. Pass `size` for pixel space; omit it for normalized space.
+    func dividerX(in size: CGSize? = nil) -> (Float) -> Float {
+        let frontTopDivider = point(frontDividerTop, in: size)
+        let bottomDivider = point(frontTopMiddle, in: size)
+        let backTopDivider = point(backDividerTop, in: size)
 
-        return { y in
-            let start: SIMD2<Float>
-            let end: SIMD2<Float>
+        return { yFloat in
+            let y = CGFloat(yFloat)
+            let start: CGPoint
+            let end: CGPoint
 
             if y <= frontTopDivider.y {
                 // Case A: Bottom Section
@@ -44,12 +63,12 @@ nonisolated struct BoxDetection: Codable, Sendable {
             }
             else if y >= backTopDivider.y {
                 // Case B: Top Section (Parallel Projection)
-                // Vector Math: Calculate direction (B - A) and add to C
-                // No manual loops needed; SIMD handles the subtraction/addition.
-                let direction = bottomDivider - frontTopDivider
-
+                // Calculate direction (B - A) and add to C
                 start = backTopDivider
-                end = backTopDivider + direction
+                end = CGPoint(
+                    x: backTopDivider.x + (bottomDivider.x - frontTopDivider.x),
+                    y: backTopDivider.y + (bottomDivider.y - frontTopDivider.y)
+                )
             }
             else {
                 // Case C: Middle Section
@@ -62,57 +81,72 @@ nonisolated struct BoxDetection: Codable, Sendable {
             let dy = end.y - start.y
 
             // Safety: Avoid division by zero
-            guard abs(dy) > .leastNormalMagnitude else { return start.x }
+            guard abs(dy) > .leastNormalMagnitude else { return Float(start.x) }
 
             let t = (y - start.y) / dy
 
-            // 3. Built-in Interpolation
-            // simd_mix(a, b, t) is the hardware-optimized version of "a + (b - a) * t"
-            return simd_mix(start.x, end.x, t)
+            // 3. Interpolate
+            return Float(start.x + (end.x - start.x) * t)
         }
     }
 
-    // Control which properties get saved
-    enum CodingKeys: String, CodingKey {
-        case objectConf
-        case keypoints
+    /// Front-top edge's y for a given x. Used to gate "is this hand inside the counting region?".
+    /// Pass `size` for pixel space; omit it for normalized space.
+    func frontTopLineY(in size: CGSize? = nil) -> (Float) -> Float {
+        Self.line(from: point(frontTopLeft, in: size), to: point(frontTopRight, in: size))
     }
 
-    private let keypointNames: [String] = ["Front top left", "Front bottom left", "Front top middle", "Front bottom middle", "Front top right", "Front bottom right", "Back divider top", "Front divider top", "Back top left", "Back top right"]
-
-    subscript(name: String) -> Keypoint {
-        let idx = keypointNames.firstIndex(of: name)!
-        return keypoints[idx]
+    /// Back-top edge's y for a given x. Pass `size` for pixel space; omit it for normalized space.
+    func backTopLineY(in size: CGSize? = nil) -> (Float) -> Float {
+        Self.line(from: point(backTopLeft, in: size), to: point(backTopRight, in: size))
     }
 
-    /// Denormalizes a named keypoint into pixel coordinates for the given image size.
-    func pixelPosition(of name: String, in size: CGSize) -> SIMD2<Float> {
-        let p = self[name].location
-        return SIMD2<Float>(Float(p.x * size.width), Float(p.y * size.height))
+    /// The keypoint's location in pixels if `size` is given, otherwise as stored (normalized).
+    private func point(_ keypoint: Keypoint, in size: CGSize?) -> CGPoint {
+        guard let size else { return keypoint.location.cgPoint }
+        return keypoint.location.toImageCoordinates(size)
     }
 
-    /// Line through the two front-top corners. Returns the line's y in pixel space
-    /// for a given x. Used to gate "is this hand inside the counting region?".
-    func frontTopLineY(in size: CGSize) -> (Float) -> Float {
-        let left = pixelPosition(of: "Front top left", in: size)
-        let right = pixelPosition(of: "Front top right", in: size)
-        return { x in
+    /// y on the line through `left` and `right` for a given x. Works in any coordinate space.
+    private static func line(from left: CGPoint, to right: CGPoint) -> (Float) -> Float {
+        { xFloat in
+            let x = CGFloat(xFloat)
             let dx = right.x - left.x
-            guard abs(dx) > .leastNormalMagnitude else { return left.y }
+            guard abs(dx) > .leastNormalMagnitude else { return Float(left.y) }
             let t = (x - left.x) / dx
-            return simd_mix(left.y, right.y, t)
+            return Float(left.y + (right.y - left.y) * t)
+        }
+    }
+
+    func targetZone(handedness: HumanHandPoseObservation.Chirality) -> TargetZone {
+        let x = backDividerTop.location.x
+        let backTopMiddle = Keypoint(
+            confidence: backDividerTop.confidence,
+            location: NormalizedPoint(x: x, y: CGFloat(backTopLineY()(Float(x))))
+        )
+
+        if handedness == .left {
+            return TargetZone(
+                topLeft: backTopLeft,
+                topRight: backTopMiddle,
+                bottomRight: frontTopMiddle,
+                bottomLeft: frontTopLeft
+            )
+            
+        } else { // defaults to handedness right
+            return TargetZone(
+                topLeft: backTopMiddle,
+                topRight: backTopRight,
+                bottomRight: frontTopRight,
+                bottomLeft: frontTopMiddle
+            )
         }
     }
 }
 
 struct Keypoint: Codable {
     let confidence: Float
-    var location: NormalizedPoint
-
-    init(confidence: Float, position: NormalizedPoint) {
-        self.confidence = confidence
-        self.location = position
-    }
+    let location: NormalizedPoint
 }
 
 // MARK: - BoxDetector
@@ -135,7 +169,10 @@ struct BoxDetector {
         guard let obs = try? await request.perform(on: image) else { return nil }
         guard let shapedArray = (obs as! [CoreMLFeatureValueObservation]).first?
             .featureValue.shapedArrayValue(of: Float.self) else { return nil }
-        return BoxDetector.processKeypointOutput(shapedArray, originalImageSize: image.extent.size)
+        return BoxDetector.processKeypointOutput(
+            shapedArray,
+            originalImageSize: image.extent.size
+        )
     }
 
     /// Processes the raw model output to extract keypoints
@@ -152,20 +189,12 @@ struct BoxDetector {
         
         // Process each anchor
         for anchorIdx in 0..<numAnchors {
-            var detection = BoxDetection()
-            
-            // Extract bounding box info (first 5 channels)
-            detection.centerX = shapedArray[scalarAt: [0, 0, anchorIdx]]
-            detection.centerY = shapedArray[scalarAt: [0, 1, anchorIdx]]
-            detection.width = shapedArray[scalarAt: [0, 2, anchorIdx]]
-            detection.height = shapedArray[scalarAt: [0, 3, anchorIdx]]
-            detection.objectConf = shapedArray[scalarAt: [0, 4, anchorIdx]]
-            
-            // Skip low confidence detections
-            if detection.objectConf < objectConfThreshold {
+            // Skip low confidence detections (channel 4)
+            let objectConf = shapedArray[scalarAt: [0, 4, anchorIdx]]
+            if objectConf < objectConfThreshold {
                 continue
             }
-            
+
             // Extract keypoints (channels 5-34)
             var keypoints: [Keypoint] = []
             for kptIdx in 0..<numKeypoints {
@@ -178,10 +207,28 @@ struct BoxDetector {
                     SIMD2<Float>(x, y),
                     originalImageSize: originalImageSize
                 )
-                keypoints.append(Keypoint(confidence: conf, position: normalized))
+                keypoints.append(Keypoint(confidence: conf, location: normalized))
             }
-            detection.keypoints = keypoints
-            allDetections.append(detection)
+            guard keypoints.count == 10 else { continue }
+
+            // Bounding box info (channels 0-3), keypoints in the order the model outputs them
+            allDetections.append(BoxDetection(
+                centerX: shapedArray[scalarAt: [0, 0, anchorIdx]],
+                centerY: shapedArray[scalarAt: [0, 1, anchorIdx]],
+                width: shapedArray[scalarAt: [0, 2, anchorIdx]],
+                height: shapedArray[scalarAt: [0, 3, anchorIdx]],
+                objectConf: objectConf,
+                frontTopLeft: keypoints[0],
+                frontBottomLeft: keypoints[1],
+                frontTopMiddle: keypoints[2],
+                frontBottomMiddle: keypoints[3],
+                frontTopRight: keypoints[4],
+                frontBottomRight: keypoints[5],
+                backDividerTop: keypoints[6],
+                frontDividerTop: keypoints[7],
+                backTopLeft: keypoints[8],
+                backTopRight: keypoints[9]
+            ))
         }
 
         // Apply Non-Maximum Suppression (operates on centerX/Y/W/H in raw model space)

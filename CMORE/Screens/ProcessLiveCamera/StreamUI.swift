@@ -24,6 +24,19 @@ struct StreamUI: View {
             VStack{
                 HandednessIndicator(handedness: viewModel.handedness)
                     .padding(.top, 5)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            viewModel.toggleHandedness()
+                        }
+                    }
+                HStack(spacing: 6) {
+                    Text("\(viewModel.blockCounts)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
                 Spacer()
             }
 
@@ -58,21 +71,6 @@ struct StreamUI: View {
         }
         .background(Color.clear)
         .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 50)
-                .onEnded { gesture in
-                    
-                    let horizontalMovement = gesture.translation.width
-                    let verticalMovement = gesture.translation.height
-                    
-                    // Check if it's more horizontal than vertical (true swipe)
-                    if abs(horizontalMovement) > abs(verticalMovement) {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            viewModel.toggleHandedness()
-                        }
-                    }
-                }
-        )
         .alert("Save session?", isPresented: $viewModel.showSaveConfirmation) {
             Button("Save") {
                 viewModel.saveSession()
@@ -86,9 +84,11 @@ struct StreamUI: View {
         } message: {
             Text("Save this recording to your library?")
         }
+        .sheet(isPresented: $viewModel.showStartConfirmation) {
+            FileNamingSheet(viewModel: viewModel)
+        }
         .sheet(isPresented: $showFileNamingSheet) {
             FileNamingSheet(viewModel: viewModel)
-                .interactiveDismissDisabled()
         }
         .alert("Camera need to see the box before starting counting blocks.", isPresented: $viewModel.askForBox) {
             Button("Resume") {
@@ -227,7 +227,7 @@ private struct FileNamingSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var customName: String = ""
-    @State private var prompt: String = "Enter a custom file name"
+    @State private var prompt: String = "Name your session"
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -244,18 +244,30 @@ private struct FileNamingSheet: View {
                     let goodFileName = viewModel.checkExist(fileName: customName)
                     if goodFileName == nil  {
                         // No buttons to recover with — keep the keyboard up
-                        prompt = "That nane exists. Try another!"
+                        prompt = "That name exists. Try another!"
                         isFocused = true
                         return
                     }
+                    if viewModel.showStartConfirmation == true {
+                        viewModel.startRecording(nameRequest: goodFileName!)
+                    } else {
+                        viewModel.saveSession(nameRequest: goodFileName!)
+                    }
                     dismiss()
-                    viewModel.saveSession(nameRequest: goodFileName!)
                 }
+            Button("Default Name") {
+                if viewModel.showStartConfirmation == true {
+                    viewModel.startRecording()
+                } else {
+                    viewModel.saveSession()
+                }
+                dismiss()
+            }
+            .font(.system(size: 18))
+            .buttonStyle(.bordered)
         }
         .padding(24)
-        .onAppear {
-            isFocused = true
-        }
+        .interactiveDismissDisabled()
     }
 }
 
