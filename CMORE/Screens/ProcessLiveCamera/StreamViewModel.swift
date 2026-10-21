@@ -54,23 +54,19 @@ class StreamViewModel: ObservableObject {
 
     // MARK: - Private Properties
 
-    private let cameraManager = CameraManager()
+    private let cameraManager: any CameraManaging
 
     /// The URL of the current video being processed (temporary)
     private var currentVideoURL: URL?
 
-    /// Suffix for both saved video and result
-    private var fileNameModified: Bool = false
-    
-    private var videoFileName: String = ""
-    
-    private var resultsFileName: String = ""
+    /// File names and session name for the current recording
+    private var names: RecordingNames?
 
     /// Timestamp for the start
     private var recordingStartTime: CMTime?
 
     /// The algorithm and ml results for the video
-    private var result: [FrameResult]?
+    private(set) var result: [FrameResult]?
 
     /// Processes each frame through it
     private var frameProcessor: FrameProcessor!
@@ -81,7 +77,8 @@ class StreamViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init() {
+    init(cameraManager: any CameraManaging = CameraManager()) {
+        self.cameraManager = cameraManager
         cameraManager.setup()
 
         self.frameProcessor = FrameProcessor(
@@ -174,20 +171,18 @@ class StreamViewModel: ObservableObject {
         guard let videoURL = currentVideoURL,
               let result = result,
               !result.isEmpty,
-              let recordingStartTime = recordingStartTime else {
+              let recordingStartTime = recordingStartTime,
+              let pendingNames = names else {
             print("Stream View Model: missing data for session save")
             return
         }
 
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
 
-        if let nameRequest {
-            videoFileName = "\(nameRequest).mov"
-            resultsFileName = "\(nameRequest).json"
-            fileNameModified = true
-        }
+        // A name chosen at save time overrides whatever was set when recording started
+        let names = nameRequest.map { RecordingNames(customName: $0) } ?? pendingNames
 
-        let finalVideoURL = documentsDir.appendingPathComponent(videoFileName)
+        let finalVideoURL = documentsDir.appendingPathComponent(names.videoFileName)
 
         if finalVideoURL != videoURL {
             do {
@@ -200,7 +195,7 @@ class StreamViewModel: ObservableObject {
 
         // Save results JSON
 
-        let resultsURL = documentsDir.appendingPathComponent(resultsFileName)
+        let resultsURL = documentsDir.appendingPathComponent(names.resultsFileName)
 
         do {
             let data = try JSONEncoder().encode(result.map {
@@ -216,16 +211,13 @@ class StreamViewModel: ObservableObject {
         // Compute block count from results
         let blockCount = result.compactMap(\.blockTransfered).max() ?? 0
 
-        // if not custom, should be empty
-        let sessionName = (fileNameModified) ? nameRequest : ""
-
         Task {
             do {
                 try await SessionStore.shared.add(
-                    name: sessionName!,
+                    name: names.sessionName,
                     blockCount: blockCount,
                     videoFileName: finalVideoURL.lastPathComponent,
-                    resultsFileName: resultsFileName,
+                    resultsFileName: names.resultsFileName,
                     handedness: handedness
                 )
             } catch {
@@ -238,23 +230,27 @@ class StreamViewModel: ObservableObject {
             self.recordingStartTime = nil
             self.showSaveConfirmation = false
             self.shouldDismissCamera = true
-            self.fileNameModified = false
+            self.names = nil
         }
     }
     
+    /// Returns the cleaned-up name to save under, or nil if it's empty or either of its files already exists
     func checkExist(fileName: String) -> String? {
         let trimmed = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        
-        let videoFileName = "\(fileName).mov"
-        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let finalVideoURL = documentsDir.appendingPathComponent(videoFileName)
-        if FileManager.default.fileExists(atPath: finalVideoURL.path) {return nil}
 
         let invalidCharacters = CharacterSet(charactersIn: "/:")
-        return trimmed
+        let sanitized = trimmed
             .components(separatedBy: invalidCharacters)
             .joined(separator: "-")
+
+        // Check the name we will actually save under, for both files it produces
+        let names = RecordingNames(customName: sanitized)
+        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let taken = [names.videoFileName, names.resultsFileName].contains {
+            FileManager.default.fileExists(atPath: documentsDir.appendingPathComponent($0).path)
+        }
+        return taken ? nil : sanitized
     }
 
     /// Discards the pending recording (video file + in-memory results)
@@ -266,7 +262,7 @@ class StreamViewModel: ObservableObject {
         currentVideoURL = nil
         result = nil
         recordingStartTime = nil
-        fileNameModified = false
+        names = nil
 
         showSaveConfirmation = false
         shouldDismissCamera = true
@@ -346,17 +342,10 @@ class StreamViewModel: ObservableObject {
 
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 
-        if (nameRequest != nil) {
-            videoFileName = "\(nameRequest!).mov"
-            resultsFileName = "\(nameRequest!).csv"
-            fileNameModified = true
-        } else {
-            let suffix = String(Date().timeIntervalSince1970)
-            videoFileName = "CMORE_Recording_\(suffix).mov"
-            resultsFileName = "CMORE_Recording_\(suffix).json"
-        }
-        
-        let outputURL = documentsPath.appendingPathComponent(videoFileName)
+        let names = RecordingNames(customName: nameRequest)
+        self.names = names
+
+        let outputURL = documentsPath.appendingPathComponent(names.videoFileName)
         currentVideoURL = outputURL
 
         cameraManager.startRecording(to: outputURL)

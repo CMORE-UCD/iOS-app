@@ -9,7 +9,7 @@
 import CoreImage
 import AVFoundation
 
-nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureFileOutputRecordingDelegate {
+nonisolated final class CameraManager: NSObject, @unchecked Sendable, CameraManaging, AVCaptureFileOutputRecordingDelegate {
     // MARK: - Public Properties
 
     /// The camera capture session, exposed for use by CameraPreviewView
@@ -24,7 +24,7 @@ nonisolated final class CameraManager: NSObject, @unchecked Sendable, AVCaptureF
     // MARK: - Callbacks
 
     /// Called when movie file recording finishes
-    var onRecordingFinished: (@Sendable (URL, Error?) -> Void)!
+    var onRecordingFinished: (@Sendable (URL, Error?) -> Void)?
 
     /// Called with the timestamp of the first frame actually written to the video file
     var onRecordingStarted: (@Sendable (CMTime) -> Void)?

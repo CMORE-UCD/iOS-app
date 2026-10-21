@@ -28,7 +28,10 @@ struct OverlayView: View {
         
         if let boxDetection = overlay.boxDetection {
             BoxView(geometry, boxDetection)
-            TargetZoneView(geometry, boxDetection, handedness!)
+            // Imported videos only learn handedness after processing finishes
+            if let handedness {
+                TargetZoneView(geometry, boxDetection, handedness)
+            }
         }
         
         if let hands = overlay.hands {
