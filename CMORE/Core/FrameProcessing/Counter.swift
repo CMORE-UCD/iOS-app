@@ -14,16 +14,18 @@ struct Counter {
     var box: BoxDetection
     var results: [FrameResult]
 
-    private(set) var state = AttemptState()
+    private(set) var state: AttemptState
     private var targetBlockRegistry = TargetBlockRegistry()
 
     init(
         handedness: HumanHandPoseObservation.Chirality,
         blockCounts: Int,
         box: BoxDetection,
-        results: [FrameResult]
+        results: [FrameResult],
+        onCross: @escaping () -> Void = {}
     ) {
         self.handedness = handedness
+        self.state = AttemptState(onCross: onCross)
         self.blockCounts = blockCounts
         self.box = box
         self.results = results
@@ -31,8 +33,7 @@ struct Counter {
     
     /// All geometry (target zone, block positions) is done in pixel space for `resolution`,
     /// matching `HandPosition.transition` and the `BoxDetection` line helpers.
-    /// - Parameter onCross: Called when the hand moves onto the crossed side this frame.
-    mutating func update(with detection: FrameResult, in resolution: CGSize = CameraSettings.resolution, onCross: () -> Void = {}) -> FrameResult {
+    mutating func update(with detection: FrameResult, in resolution: CGSize = CameraSettings.resolution) -> FrameResult {
         dprint("Counter: updating counter!")
         if detection.boxDetection != nil {
             box = detection.boxDetection!
@@ -41,7 +42,7 @@ struct Counter {
         targetBlockRegistry.record(blocksInTarget(detection.blockDetections, in: resolution))
 
         let hand = state.hand.transition(by: hands, box, in: resolution)
-        if state.update(hand: hand, registry: &targetBlockRegistry, onCross: onCross) {
+        if state.countsBlock(handAt: hand, registry: &targetBlockRegistry) {
             blockCounts += 1
         }
         dprint("Counter: \(blockCounts) valid blocks")

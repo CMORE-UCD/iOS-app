@@ -24,16 +24,21 @@ struct AttemptState {
     private(set) var hand: HandPosition = .inital
     private(set) var phase: Phase = .awaitingBlockMovement
 
-    /// Advances one frame and returns true if a block was counted.
+    /// Called when the hand moves onto the crossed side
+    private let onCross: () -> Void
+
+    init(onCross: @escaping () -> Void = {}) {
+        self.onCross = onCross
+    }
+
+    /// Advances one frame and returns true if this frame counts a block.
     /// - Parameters:
     ///   - newHand: This frame's hand position, from `HandPosition.transition`.
     ///   - registry: Must already hold this frame's blocks. A moved block is only claimed while
     ///               awaiting block movement, so one that moves while locked can still count later.
-    ///   - onCross: Called when the hand moves onto the crossed side this frame.
-    mutating func update(
-        hand newHand: HandPosition,
-        registry: inout TargetBlockRegistry,
-        onCross: () -> Void = {}
+    mutating func countsBlock(
+        handAt newHand: HandPosition,
+        registry: inout TargetBlockRegistry
     ) -> Bool {
         let previous = hand
         hand = newHand

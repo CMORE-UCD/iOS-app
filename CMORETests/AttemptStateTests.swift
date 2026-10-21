@@ -20,12 +20,12 @@ struct AttemptStateTests {
 
     /// Feeds frames to a fresh state and registry; returns per-frame counted flags and the crossing count.
     private func run(_ frames: [Frame]) -> (counted: [Bool], crosses: Int) {
-        var state = AttemptState()
-        var registry = TargetBlockRegistry()
         var crosses = 0
+        var state = AttemptState(onCross: { crosses += 1 })
+        var registry = TargetBlockRegistry()
         let counted = frames.map { frame in
             registry.record(frame.blocks)
-            return state.update(hand: frame.hand, registry: &registry, onCross: { crosses += 1 })
+            return state.countsBlock(handAt: frame.hand, registry: &registry)
         }
         return (counted, crosses)
     }
@@ -35,9 +35,9 @@ struct AttemptStateTests {
         var state = AttemptState()
         var registry = TargetBlockRegistry()
         registry.record([blockA: box(100)])
-        #expect(!state.update(hand: .crossed, registry: &registry))
+        #expect(!state.countsBlock(handAt: .crossed, registry: &registry))
         registry.record([blockA: box(120)])
-        #expect(state.update(hand: .crossed, registry: &registry))
+        #expect(state.countsBlock(handAt: .crossed, registry: &registry))
         #expect(state.phase == .awaitingHandReturn)
     }
 

@@ -155,7 +155,8 @@ actor FrameProcessor {
             handedness: handedness,
             blockCounts: 0,
             box: box,
-            results: []
+            results: [],
+            onCross: onCrossed
         )
 
         // Create reordering stream
@@ -220,7 +221,7 @@ actor FrameProcessor {
         var updatedResult = partialResult
         
         defer {
-            let result: FrameResult = self.counter!.update(with: updatedResult, onCross: onCrossed)
+            let result: FrameResult = self.counter!.update(with: updatedResult)
             fullResult(result, frame)
         }
 
